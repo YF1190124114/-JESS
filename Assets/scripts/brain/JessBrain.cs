@@ -6,7 +6,7 @@ public class JessBrain : MonoBehaviour
     [SerializeField] private LLMClient llmClient;
     [SerializeField] private JessExpressionController expressionController;
     [SerializeField] private JessActionController actionController;
-    [SerializeField] private AliyunTtsDriver speechDriver;
+    [SerializeField] private JessSpeechController speechController;
 
     [Serializable]
     public class BrainResult
@@ -73,7 +73,7 @@ public class JessBrain : MonoBehaviour
                     actionController.PlayAction(result.action);
 
                     // Brain → Speech
-                    speechDriver.Speak(result.reply);
+                    speechController.Speak(result.reply);
                 }
                 catch (Exception e)
                 {

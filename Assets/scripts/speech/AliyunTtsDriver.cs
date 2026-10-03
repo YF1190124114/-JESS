@@ -3,7 +3,7 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.Networking;
 
-public class AliyunTtsDriver : MonoBehaviour
+public class AliyunTtsDriver : MonoBehaviour, IJessSpeechDriver
 {
     [Header("Aliyun NLS")]
     [SerializeField] private string appKey;
