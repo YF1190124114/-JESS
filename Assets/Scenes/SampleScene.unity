@@ -344,6 +344,11 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!137 &526277256 stripped
+SkinnedMeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 1916479863509945440, guid: fb3664044385e4515a51bd8eae77e2e2, type: 3}
+  m_PrefabInstance: {fileID: 2054234562}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &614780859
 GameObject:
   m_ObjectHideFlags: 0
@@ -691,6 +696,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Jess
       objectReference: {fileID: 0}
+    - target: {fileID: -1728013695380148634, guid: e9d473ab5bff241e7aa500dffe5cbc97, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 2953604236389334553, guid: e9d473ab5bff241e7aa500dffe5cbc97, type: 3}
       propertyPath: m_DirtyAABB
       value: 0
@@ -867,6 +876,7 @@ GameObject:
   - component: {fileID: 1255658405}
   - component: {fileID: 1255658407}
   - component: {fileID: 1255658406}
+  - component: {fileID: 1255658408}
   m_Layer: 0
   m_Name: Expression
   m_TagString: Untagged
@@ -915,8 +925,36 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1c2ff28d778384a59b8a9bd4f38a50b7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  expressionDriverComponent: {fileID: 1255658406}
+  expressionDriverComponent: {fileID: 1255658408}
   transitionDuration: 0.6
+--- !u!114 &1255658408
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1255658404}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bd058955cd4f84f5fb83c437852465ab, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  expressions:
+  - expressionName: neutral
+    targets:
+    - mesh: {fileID: 526277256}
+      blendShapeName: Fcl_ALL_Neutral
+      targetWeight: 1
+  - expressionName: happy
+    targets:
+    - mesh: {fileID: 526277256}
+      blendShapeName: Fcl_ALL_Joy
+      targetWeight: 1
+  - expressionName: fake_smile
+    targets:
+    - mesh: {fileID: 526277256}
+      blendShapeName: "\u5047\u7B11"
+      targetWeight: 1
 --- !u!1 &1576733159 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -9202605092671148497, guid: fb3664044385e4515a51bd8eae77e2e2, type: 3}
