@@ -1,0 +1,81 @@
+JESS Current System State
+日期：2026-09-30
+用途：只回答“现在已经能做到什么、下一步是什么”。
+
+==================================================
+当前已跑通
+==================================================
+
+ASR：
+macOS Standalone Build 已验证
+Microphone → PCM → Alibaba NLS → userText
+
+Brain：
+userText / 测试字符串
+→ JessBrain
+→ LLMClient
+→ Qwen
+→ BrainResult
+
+BrainResult：
+reply       ✅ 已生成
+expression  ✅ 已生成并进入 Body
+action      ✅ 已生成并进入 Body
+
+Expression：
+Brain.expression
+→ JessExpressionController
+→ IJessExpressionDriver
+→ JessVRMExpressionDriver
+→ VRM Runtime Expression
+→ Face
+已验证。
+
+Action：
+Brain.action
+→ JessActionController
+→ IJessActionDriver
+→ JessAnimatorActionDriver
+→ Animator
+→ Body
+形式链已验证。
+
+测试动作 testaction 已证明：
+代码触发 → Clip → 骨骼 → 动作结束 → Transition → idle。
+
+==================================================
+当前没有完成
+==================================================
+
+- TTS / JESS 真正说出 reply
+- 正式动作库
+- 正式 Blender/GLB 模型实测
+- 正式人格
+- 正式动作语义词表
+- ASR Token 自动刷新
+- macOS Post-build 自动写 Info.plist
+- Unity Editor 麦克风修复
+- 最终完整 Speech→Brain→TTS/Face/Body 全链路
+
+==================================================
+下一步
+==================================================
+
+优先做 TTS V0：
+
+BrainResult.reply
+→ Speech Controller
+→ TTS Driver
+→ AudioClip
+→ AudioSource
+→ JESS 说出声
+
+目标不是先打磨声音内容，
+而是先补齐当前唯一缺失的输出通道。
+
+完成后，JESS V0 的形式骨架将具备：
+
+输入文字 / ASR
+→ Brain
+→ reply + expression + action
+→ 声音 + 表情 + 动作

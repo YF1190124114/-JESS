@@ -1,0 +1,271 @@
+JESS Current System State
+日期：2026-10-05
+用途：只回答“现在已经能做到什么、当前证据是什么、下一步是什么”。
+
+核对基线：
+main / origin/main = 0903302
+Merge pull request #3 from feature/blender-expression
+
+==================================================
+当前稳定基线
+==================================================
+
+当前 main 已包含三轮 PR 合并：
+
+1. Speech 架构重构
+   refactor/speech-architecture
+   4131ecf refactor: route speech through JessSpeechController
+   40d16bf Merge pull request #1
+   → PR #1
+
+2. Unity 模块架构重构
+   refactor/module-architecture
+   a6f6979 refactor: organize JESS into perception brain and output modules
+   d3a903a Merge pull request #2
+   → PR #2
+
+3. Blender Expression 接入
+   feature/blender-expression
+   26f02c0 configure Blender expression mappings
+   0903302 Merge pull request #3
+   → PR #3
+
+当前 main 与 origin/main 一致，
+应视为后续开发的新稳定基线。
+
+当前分支引用中已不再保留上述 feature / refactor branch，
+Git/GitHub 工作流已实际形成：
+
+feature branch
+→ commit
+→ push
+→ Pull Request
+→ merge 到 main
+→ 删除 / 清理 feature branch
+
+==================================================
+当前 Unity 模块结构
+==================================================
+
+Assets/scripts/
+├─ perception/
+│  ├─ hearing/
+│  │  └─ MicrophoneRecorder
+│  └─ vision/（空）
+├─ brain/
+│  ├─ JessBrain
+│  └─ LLMClient
+└─ output/
+   ├─ speech/
+   │  ├─ JessSpeechController
+   │  ├─ IJessSpeechDriver
+   │  └─ AliyunTtsDriver
+   └─ body/
+      ├─ expression/
+      │  ├─ JessExpressionController
+      │  ├─ IJessExpressionDriver
+      │  ├─ JessBlendShapeExpressionDriver
+      │  └─ JessVRMExpressionDriver
+      └─ action/
+         ├─ JessActionController
+         ├─ IJessActionDriver
+         └─ JessAnimatorActionDriver
+
+JessSecrets.cs 仍位于 Assets/scripts/ 根部。
+
+==================================================
+当前 SampleScene Hierarchy
+==================================================
+
+SampleScene
+├─ Main Camera
+├─ Directional Light
+├─ JessPerception
+│  └─ Hearing
+├─ JessBrain
+└─ JessOutput
+   ├─ Speech
+   └─ Body
+      ├─ Expression
+      └─ Action
+
+Scene 层级已与 Perception → Brain → Output 信息流对应。
+
+旧文档所写的 JESS_System / JESS_Character 根节点结构
+不再是当前 SampleScene 的实际结构。
+
+当前旧 VRM Jess 与 Blender / GLB jesss 相关实例仍保留，
+没有因模块重构被删除。
+
+==================================================
+Speech 当前状态
+==================================================
+
+代码与 Scene 接线已核实：
+
+JessBrain
+→ JessSpeechController
+→ IJessSpeechDriver 契约
+→ AliyunTtsDriver
+→ AudioSource
+
+具体事实：
+- JessBrain 将 BrainResult.reply 交给 speechController.Speak；
+- JessSpeechController 已处理未绑定 Driver 和空文本；
+- AliyunTtsDriver 实现 IJessSpeechDriver；
+- Speech 节点已绑定 Controller、Aliyun Driver 和 AudioSource。
+
+当前 Controller 的序列化字段仍直接使用 AliyunTtsDriver 类型，
+接口已建立，但 Provider 的 Inspector 绑定还不是完全抽象化实现。
+
+本次文档整理没有调用真实 TTS 服务，
+因此只把“架构和接线完成”列为已核实，
+不新增“本轮在线 TTS 已实测”的结论。
+
+==================================================
+Brain 当前状态
+==================================================
+
+当前仍使用固定 testInput 启动测试：
+
+JessBrain
+→ LLMClient
+→ Qwen
+→ BrainResult
+
+BrainResult：
+reply       ✅ 进入 Speech Controller
+expression  ✅ 进入 Expression Controller
+action      ✅ 进入 Action Controller
+
+当前 expression 白名单：
+neutral / angry / fun / happy / sad / surprised
+
+当前 action 白名单：
+idle
+
+注意：
+MicrophoneRecorder 得到 ASR result 后当前只写日志，
+尚未把真实 userText 自动传入 JessBrain。
+
+==================================================
+Expression 当前状态
+==================================================
+
+当前 Controller 已从 VRM Driver 切换到 BlendShape Driver：
+
+JessExpressionController
+→ IJessExpressionDriver
+→ JessBlendShapeExpressionDriver
+→ Blender / GLB BlendShape
+
+SampleScene 当前配置：
+
+neutral
+→ Fcl_ALL_Neutral
+→ targetWeight 1
+
+happy
+→ Fcl_ALL_Joy
+→ targetWeight 1
+
+fake_smile
+→ 假笑
+→ targetWeight 1
+
+JessVRMExpressionDriver 仍保留在代码和 Scene 中，
+但 expressionDriverComponent 当前指向 JessBlendShapeExpressionDriver。
+
+fake_smile 已通过临时强制 expression 完成 Play Mode 运行验证。
+该验证代码随后已删除，未进入当前 main。
+
+当前代码核对结果：
+- fake_smile 只存在于 SampleScene 的序列化映射；
+- scripts 中没有 SetExpression("fake_smile")；
+- 没有残留强制 fake_smile 的临时代码。
+
+因为 Brain 白名单当前不含 fake_smile，
+所以它目前是“已配置、已人工验证、尚未进入正常 Brain 输出”的表情。
+
+==================================================
+Action 当前状态
+==================================================
+
+当前结构保持：
+
+JessBrain
+→ JessActionController
+→ IJessActionDriver
+→ JessAnimatorActionDriver
+→ Animator
+
+历史上 testaction 已用于验证：
+代码触发 → Clip → 骨骼 → Transition → idle。
+
+正式动作资产和正式 action vocabulary 仍未完成。
+
+==================================================
+Blender / GLB 当前状态
+==================================================
+
+历史已验证：
+- Blender Shape Key 可随 GLB 进入 Unity BlendShape；
+- 独立 FBX Animation Clip 可驱动同骨架 GLB；
+- 关闭 Blender FBX Export 的 Key All Bones 后，
+  可避免无关全骨架 Transform 曲线导致模型异常位移。
+
+2026-10-05 新增完成：
+- JessBlendShapeExpressionDriver 已接入实际 Scene；
+- Blender / GLB Mesh 已配置 neutral / happy / fake_smile；
+- JessExpressionController 已切换到 BlendShape Driver；
+- fake_smile 已做临时强制运行验证，临时代码已清理。
+
+仍未完成：
+- 完整表情集合；
+- fake_smile 是否进入正式 Brain 语义词表；
+- 正式动作库；
+- Maya → FBX → Unity 往返验证；
+- FBX 动画旋转方向 / 局部轴一致性处理。
+
+==================================================
+Secret 状态
+==================================================
+
+文档中不得记录 API Key、AccessToken、密码或其他真实凭据。
+
+本轮只扫描开发文档中的凭据风险，
+未读取 LocalSecrets 的实际内容。
+
+当前文档只保留：
+- 凭据类别说明；
+- Token 可能过期的排障提醒；
+- 不记录真实 Key 的安全原则。
+
+未发现符合常见凭据格式的实际 secret。
+
+==================================================
+当前没有完成
+==================================================
+
+- ASR result → JessBrain 的真实输入接线
+- perception/vision
+- fake_smile 的正式 Brain vocabulary 决策
+- 完整 Blender 表情映射
+- 正式动作库与动作语义词表
+- ASR Token 自动刷新
+- macOS Post-build 自动写 Info.plist
+- Unity Editor 麦克风修复
+- 正式人格与记忆系统
+- 自动化测试 / Unity Play Mode 回归测试
+
+==================================================
+下一步建议
+==================================================
+
+1. 在 Unity Editor 打开当前 main，确认无 Missing Script / Missing Reference。
+2. 逐个直接调用 neutral、happy、fake_smile，做一次干净回归测试。
+3. 决定 fake_smile 是否加入 Brain expression 白名单；
+   在决定前不要重新加入临时强制代码。
+4. 将 MicrophoneRecorder 的 ASR result 通过明确接口交给 Brain，
+   补齐 Perception → Brain 的真实运行链。
+5. 后续功能继续使用 feature branch → PR → merge 流程。

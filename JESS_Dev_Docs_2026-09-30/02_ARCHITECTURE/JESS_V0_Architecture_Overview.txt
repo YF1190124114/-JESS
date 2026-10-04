@@ -1,0 +1,247 @@
+JESS V0 Architecture Overview
+首次整理：2026-09-30
+最近核对：2026-10-05
+性质：稳定架构说明，不记录具体 Debug 过程
+
+本文件以当前 main（0903302）中的代码与 SampleScene 为准。
+旧文档中的 JESS_System / JESS_Character 结构仍可作为历史设计背景，
+但当前 Scene 已按 Perception → Brain → Output 重组，详见第 3 节。
+
+==================================================
+1. 当前总体结构：按信息流分层
+==================================================
+
+Perception（输入感知）
+└─ Hearing
+   └─ MicrophoneRecorder
+
+Brain（理解与决策）
+├─ JessBrain
+└─ LLMClient
+
+Output（输出执行）
+├─ Speech
+│  ├─ JessSpeechController
+│  ├─ IJessSpeechDriver
+│  └─ AliyunTtsDriver
+└─ Body
+   ├─ Expression
+   │  ├─ JessExpressionController
+   │  ├─ IJessExpressionDriver
+   │  ├─ JessBlendShapeExpressionDriver
+   │  └─ JessVRMExpressionDriver（保留的兼容 Driver）
+   └─ Action
+      ├─ JessActionController
+      ├─ IJessActionDriver
+      └─ JessAnimatorActionDriver
+
+对应脚本目录：
+
+Assets/scripts/
+├─ perception/
+│  ├─ hearing/
+│  └─ vision/（当前为空）
+├─ brain/
+└─ output/
+   ├─ speech/
+   └─ body/
+      ├─ expression/
+      └─ action/
+
+JessSecrets.cs 仍保留在 Assets/scripts/ 根部，未纳入模块移动。
+
+==================================================
+2. 当前运行时信息流
+==================================================
+
+Brain 当前产生：
+
+BrainResult
+├─ reply
+├─ expression
+└─ action
+
+输出分发：
+
+reply
+→ JessSpeechController
+→ IJessSpeechDriver 所定义的 Speak 契约
+→ AliyunTtsDriver
+→ AudioSource
+
+expression
+→ JessExpressionController
+→ IJessExpressionDriver
+→ 当前选中的 JessBlendShapeExpressionDriver
+→ Blender / GLB Mesh BlendShape
+
+action
+→ JessActionController
+→ IJessActionDriver
+→ JessAnimatorActionDriver
+→ Animator
+
+重要实现细节：
+- AliyunTtsDriver 已实现 IJessSpeechDriver；
+- 当前 JessSpeechController 的序列化字段类型仍是具体的 AliyunTtsDriver，
+  因此“Controller → Interface → Driver”是当前逻辑契约，
+  但 Inspector 绑定仍是 V0 的具体 Driver 绑定；
+- JessBrain 当前在 Start 中使用固定 testInput 调用 LLM；
+- MicrophoneRecorder 得到 ASR result 后目前只记录日志，
+  尚未把 userText 送入 JessBrain。
+
+因此 Perception → Brain → Output 是已经建立的模块边界，
+但“真实 ASR 文本自动进入 Brain”的运行闭环尚未完成。
+
+==================================================
+3. 当前 SampleScene Hierarchy
+==================================================
+
+当前 Scene 的系统节点已从旧的 JESS_System / JESS_Character 组织方式，
+调整为与信息流一致的模块节点：
+
+SampleScene
+├─ Main Camera
+├─ Directional Light
+├─ JessPerception
+│  └─ Hearing
+│     └─ MicrophoneRecorder
+├─ JessBrain
+│  ├─ LLMClient
+│  └─ JessBrain
+└─ JessOutput
+   ├─ Speech
+   │  ├─ AudioSource
+   │  ├─ AliyunTtsDriver
+   │  └─ JessSpeechController
+   └─ Body
+      ├─ Expression
+      │  ├─ JessExpressionController
+      │  ├─ JessVRMExpressionDriver（保留）
+      │  └─ JessBlendShapeExpressionDriver（当前 Controller 指向）
+      └─ Action
+         ├─ JessActionController
+         └─ JessAnimatorActionDriver
+
+当前 Scene 仍同时保留旧 VRM Jess 与 Blender / GLB jesss 相关实例和引用。
+当前模型对象挂在 Expression / Action 模块节点下，是现阶段集成状态。
+不要再把“JESS_Character 是当前 Scene 根节点”写成现状；
+它属于 2026-09-30 时的历史结构。
+
+==================================================
+4. Speech 架构重构
+==================================================
+
+2026-10-03 的 Speech 重构把 Brain 对 TTS Driver 的直接调用改为：
+
+JessBrain
+→ JessSpeechController
+→ IJessSpeechDriver 契约
+→ AliyunTtsDriver
+
+当前代码与 Scene 已确认：
+- JessBrain 持有 speechController 引用；
+- BrainResult.reply 交给 speechController.Speak；
+- JessSpeechController 做空引用和空文本检查；
+- AliyunTtsDriver 实现 IJessSpeechDriver；
+- Speech 节点上的 Controller、Driver、AudioSource 已绑定。
+
+本次文档核对没有调用真实云端服务，
+因此这里只确认架构与序列化接线，不把本轮审计写成新的在线 TTS 运行验证。
+
+==================================================
+5. Expression 当前实现
+==================================================
+
+JessExpressionController 继续负责：
+- 接收语义 expression；
+- 旧表情淡出、新表情淡入；
+- 维持约 0.6 秒过渡；
+- 不直接依赖 VRM 或具体 BlendShape 名。
+
+2026-10-05 当前 Scene 已把 expressionDriverComponent 从
+JessVRMExpressionDriver 切换到 JessBlendShapeExpressionDriver。
+
+已配置映射：
+
+neutral
+→ Fcl_ALL_Neutral
+
+happy
+→ Fcl_ALL_Joy
+
+fake_smile
+→ 假笑
+
+三项 targetWeight 当前均为 1。
+
+JessVRMExpressionDriver 脚本和 Scene 组件仍保留，
+但不再是 JessExpressionController 当前选择的 Driver。
+
+fake_smile 曾通过临时强制 expression 的方式完成 Play Mode 验证。
+该临时代码未保留在提交中，当前脚本也不存在
+SetExpression("fake_smile") 或其他强制 fake_smile 逻辑。
+
+同时需要注意：
+JessBrain 当前 expression 白名单仍为：
+neutral / angry / fun / happy / sad / surprised。
+
+因此 fake_smile 已有模型映射并做过人工验证，
+但当前正常 Brain 输出不会自动选择 fake_smile。
+
+==================================================
+6. 核心设计边界
+==================================================
+
+Brain 只输出 JESS 语义，不应知道：
+- Bone name
+- BlendShape / Shape Key name
+- VRM ExpressionKey
+- Animator 的具体模型细节
+
+Controller 负责：
+“JESS 想做什么”。
+
+Driver / Adapter 负责：
+“当前模型或服务怎么做到”。
+
+Scene / Model / AudioSource / Animator 负责实际执行。
+
+未来更换 TTS Provider、角色模型或动画实现时，
+优先替换 Driver、映射和资产引用，避免重写 Brain。
+
+==================================================
+7. Git 开发基线
+==================================================
+
+当前 main 与 origin/main 均指向：
+0903302 Merge pull request #3 from feature/blender-expression
+
+已形成并实际使用的流程：
+
+main
+→ 创建 feature / refactor branch
+→ 完成修改并 commit
+→ push
+→ GitHub Pull Request
+→ merge 回 main
+→ 清理 feature branch
+
+当前本地与远端跟踪引用只保留 main / origin/main。
+因此当前 main 应视为最新稳定开发基线，
+后续开发应从最新 main 新建分支，不直接把试验代码长期留在 main。
+
+==================================================
+8. 当前尚未完成
+==================================================
+
+- 真实 ASR result 自动送入 JessBrain
+- perception/vision 实现
+- fake_smile 纳入正式 Brain expression vocabulary（如产品需要）
+- Blender / GLB 的完整表情集合
+- 正式动作资产与动作语义词表
+- ASR Token 自动刷新
+- macOS Post-build 自动写入 Info.plist
+- Unity Editor 麦克风问题
+- 正式人格、记忆和更完整的行为系统
+

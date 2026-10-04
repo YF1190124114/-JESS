@@ -1,0 +1,1290 @@
+JESS Brain V0 Debug Log 日期：2026-09-29 阶段：JESS「大脑」接入 / LLM
+API / 结构化输出 当前状态：Brain V0 核心接口已跑通
+
+================================================== 一、阶段目标
+==================================================
+
+本阶段目标不是训练完整的 JESS
+人格，也不是让模型直接控制身体，而是先跑通最小 Brain 链路：
+
+Unity → JessBrain → LLMClient → 阿里云百炼 / Qwen → 返回结果到 Unity
+
+在普通文本回复成功后，再升级为：
+
+用户文字 → Brain → JSON ├─ reply ├─ expression └─ action → Unity 解析
+
+这样后续可以分别把 reply 交给 TTS，把 expression/action 交给 JESS
+的表情与身体执行层。
+
+================================================== 二、当前脚本结构
+==================================================
+
+Assets/scripts/brain/ ├─ LLMClient.cs └─ JessBrain.cs
+
+LLMClient.cs： 负责 API 通信，不负责 JESS 的角色人格。
+
+JessBrain.cs： 负责 JESS 的 Prompt、输入内容以及解析 Brain 输出。
+
+设计原则： Character Brain 与具体 LLM Provider 尽量解耦。
+目前使用阿里云百炼 / Qwen，后续如更换模型，优先只修改 LLMClient / API
+配置，而不破坏上层 Brain 接口。
+
+================================================== 三、API
+配置与首次连通 ==================================================
+
+Provider： 阿里云百炼（DashScope / OpenAI-compatible API）
+
+区域： 华北2（北京）
+
+Model： qwen-plus
+
+API Key： 已配置在本地 Unity Inspector。 【不在 Debug Log 中记录真实
+Key】
+
+注意： 此前截图中曾暴露 API Key / NLS
+凭据。应轮换暴露过的凭据，后续截图需遮挡敏感信息。
+
+首次测试 Prompt： “你叫JESS。请用简短、自然的中文回答用户。”
+
+测试输入： “你好，你是谁？”
+
+成功返回类似：
+“Hi，我是Jace，一个喜欢聊天也爱听故事的朋友。有什么想聊的随时告诉我。”
+
+结论： Unity → LLMClient → 百炼/Qwen → Unity 的 API 通路成功。
+
+==================================================
+四、调试过程中出现的问题
+==================================================
+
+【问题 1】JessBrain 无法调用 LLMClient / NullReference
+
+现象： JessBrain Inspector 中： Llm Client = None (LLM Client)
+
+原因： JessBrain 的 llmClient 引用没有绑定。
+
+解决： 将 Hierarchy 中的 JESS_System 拖入： Jess Brain → Llm Client
+
+成功后显示： JESS_System (LLM Client)
+
+  ---------------------------------
+  【问题 2】Play 后没有 Brain Log
+  ---------------------------------
+
+当时现象： MicrophoneRecorder 正常运行并打印日志， 但 JessBrain
+没有出现预期日志。
+
+之后观察到： LLMClient / JessBrain 组件在重新编译后从 JESS_System
+Inspector 中消失。
+
+排查方向： 先检查 Unity Console 编译状态，而不是继续怀疑 API。
+
+  -----------------------
+  【问题 3】出现 CS1003
+  -----------------------
+
+Console 出现：
+
+Assets/scripts/brain/JessBrain.cs(9,15): error CS1003: Syntax error, ‘,’
+expected
+
+后续确认： 这条错误是调试时为了人为触发 Unity
+重新编译，修改脚本时意外产生的，并不是最初问题的可靠根因。
+
+处理： 撤销该临时修改并保存，让 Unity 重新编译。
+
+结果： CS1003 消失。 LLMClient 与 JessBrain 均能稳定挂在 JESS_System
+上。 Console 成功出现 JessBrain Awake/Start 测试信息。
+
+结论： Unity 脚本加载与组件挂载恢复正常。
+
+  ------------------------------
+  【问题 4】VS Code NuGet 警告
+  ------------------------------
+
+VS Code 曾反复提示： “未能还原解决方案的 NuGet 包” 以及加载 JessBrain.cs
+/ LLMClient.cs / MicrophoneRecorder.cs 时出现问题。
+
+当前判断： 该问题与 Unity 内部脚本是否能够编译需要分开判断。
+
+本次真正有效的判断依据是： Unity Console 是否存在 C#
+编译错误，以及组件是否能被 Unity 正确加载。
+
+目前 Brain 已经能够正常编译并运行，因此 NuGet 警告暂不阻塞 Brain V0。
+
+================================================== 五、Brain 结构化输出
+==================================================
+
+普通文本 API 调用成功后，将 Brain 输出升级为 JSON。
+
+目标格式：
+
+{ “reply”: “JESS要说的话”, “expression”: “表情”, “action”: “动作” }
+
+当前 expression 白名单：
+
+neutral angry fun happy sad surprised
+
+这些语义标签后续计划映射到 VRoid / UniVRM 中已有的完整脸部 BlendShape：
+
+neutral → Fcl_ALL_Neutral angry → Fcl_ALL_Angry fun → Fcl_ALL_Fun happy
+→ Fcl_ALL_Joy sad → Fcl_ALL_Sorrow surprised → Fcl_ALL_Surprised
+
+当前 action 暂时只允许：
+
+idle
+
+原因： 身体动作执行层尚未建立。 Brain 不应该生成 Unity
+中不存在的动作名称。
+
+==================================================
+六、结构化输出实际测试
+==================================================
+
+测试输入：
+
+“我今天真的累死了，什么都不想干。”
+
+Qwen 成功返回结构化内容。
+
+Unity 成功解析为：
+
+reply = “抱抱，快去躺平，我给你放点轻音乐”
+
+expression = happy
+
+action = idle
+
+结论：
+
+LLM → JSON → Unity JsonUtility → BrainResult
+
+链路成功。
+
+当前已经验证：
+
+reply ✅ expression ✅ action ✅
+
+================================================== 七、当前 BrainResult
+数据结构 ==================================================
+
+JessBrain 中使用：
+
+[Serializable] public class BrainResult { public string reply; public
+string expression; public string action; }
+
+Unity 已能将模型返回的 JSON 拆分成以上三个字段。
+
+================================================== 八、当前阶段结论
+==================================================
+
+Brain V0 最小接口已经跑通。
+
+当前完整状态：
+
+文字输入 ↓ JessBrain ↓ LLMClient ↓ Qwen ↓ JSON ↓ Unity 解析 ├─ reply ✅
+├─ expression ✅ └─ action ✅
+
+因此 Brain 已经具备向后续模块发出统一指令的基础能力。
+
+==================================================
+九、已知但暂不处理的问题：JESS 人格
+==================================================
+
+当前模型输出：
+
+“抱抱，快去躺平，我给你放点轻音乐。”
+
+技术上完全正确，但角色人格明显不符合目前设想中的 JESS。
+
+原因： 当前 system prompt 只提供了极弱的人格描述，例如：
+“你叫JESS，是一个自然、有个性的数字人。”
+
+因此 Qwen 会倾向生成通用、友善、陪伴型 AI 的表达方式。
+
+这不是 Brain 接口故障，而是 Character Prompt / Character Brain
+尚未设计。
+
+后续人格层需要单独处理，例如： - JESS 的语言风格 - mean / 嘴硬程度 -
+情绪表达方式 - 关心用户时是否直接表达 - 表面语言与真实情绪之间的反差 -
+什么情况下会出现罕见的温柔 - 长期关系与记忆如何改变表达
+
+重要观察： 如果 JESS 平时较
+mean、克制、嘴硬，那么偶尔出现真正温柔的表达可能具有更强的关系意义。
+这种“反差”不应成为默认输出，否则会失去角色张力。
+
+但以上属于后续 Character Brain / Character Spec 工作，不影响当前 Brain
+V0 工程接口。
+
+================================================== 十、下一步
+==================================================
+
+Brain V0 暂时封口。
+
+下一阶段建议单独进入： JESS 表情 / Body 执行层。
+
+第一目标：
+
+Brain 输出： expression = happy
+
+↓ Body 接收语义标签
+
+↓ 映射： happy → Fcl_ALL_Joy
+
+↓ JESS 在 Unity 中真正做出笑脸
+
+随后依次验证六种表情。
+
+身体动作 action 暂时保持 idle， 待 Animator / 动作资源整理后再扩展
+action 白名单。
+
+================================================== 当前里程碑
+==================================================
+
+ASR / 耳朵： 已能完成 microphone → ASR → userText（此前阶段）
+
+Brain / 大脑： API 通路 ✅ Qwen 返回 ✅ JSON 结构化输出 ✅ Unity JSON
+解析 ✅ reply 字段 ✅ expression 字段 ✅ action 字段 ✅
+
+下一模块： Expression / Body 执行层
+
+
+
+##################################################################
+JESS Unity Integration Debug Log — Continuation
+日期：2026-09-30
+阶段：Expression / Body 抽象层 + Animator Action 执行层 + Brain→Body 闭环
+当前状态：形式/系统骨架已基本跑通；内容资产与角色表现暂不细化
+##################################################################
+
+==================================================
+十一、从 Brain V0 之后，本轮工作的目标
+==================================================
+
+上一份日志结束时，Brain 已经能够稳定输出：
+
+reply
+expression
+action
+
+但当时 expression / action 还只是“JSON 字段”，尚未真正驱动 JESS 的身体。
+
+本轮目标不是打磨具体表情和动作内容，而是搭建一个可替换、可扩展的执行框架：
+
+Brain
+├─ expression → Expression Controller → Expression Driver → Model
+└─ action     → Action Controller     → Action Driver     → Animator / Model
+
+核心原则：
+
+1. Brain 只输出“语义命令”，例如 sad / happy / idle。
+2. Brain 不直接知道 BlendShape 名、骨骼名、VRM API 或 Animator 细节。
+3. Controller 负责稳定的 JESS 语义接口。
+4. Driver / Adapter 负责把语义翻译成“当前模型真正能执行的操作”。
+5. 未来从当前 VRM 换成 Blender/GLB 模型时，优先替换 Driver 和模型映射，而不是重写 Brain。
+
+这意味着目前正在搭建的是“形式骨架”，而不是最终角色内容。
+
+
+==================================================
+十二、稳定模型槽位与当前场景结构
+==================================================
+
+当前场景的核心结构为：
+
+SampleScene
+├─ Main Camera
+├─ Directional Light
+├─ JESS_Character
+│  └─ Jess
+└─ JESS_System
+
+其中：
+
+JESS_Character
+= 稳定的“角色槽位 / Character Root”。
+
+Jess
+= 当前实际使用的 VRM 模型。
+
+JESS_System
+= 与具体模型尽量解耦的系统组件容器。
+
+当前 Jess 被重新挂到 JESS_Character 下后，位置未发生异常，Play Mode 测试正常。
+
+这一结构为未来换模预留了边界：
+
+JESS_Character
+└─ 当前模型（可替换）
+
+JESS_System
+└─ Brain / Speech / Expression / Action 等长期系统（尽量保留）
+
+
+==================================================
+十三、当前 VRM 模型与表情资源确认
+==================================================
+
+当前 Jess 是通过 UniVRM 导入 Unity 的 VRM 1.0 模型。
+
+Jess 根对象上目前存在的关键模型组件包括：
+
+- Humanoid
+- Animator
+- Vrm10Instance
+
+Face 上存在 Skinned Mesh Renderer 和 BlendShape。
+
+已经确认当前模型包含：
+
+neutral    → Fcl_ALL_Neutral
+angry      → Fcl_ALL_Angry
+fun        → Fcl_ALL_Fun
+happy      → Fcl_ALL_Joy
+sad        → Fcl_ALL_Sorrow
+surprised  → Fcl_ALL_Surprised
+
+手动 Inspector 测试：
+
+Fcl_ALL_Joy = 100
+
+可以让 JESS 正确出现笑脸。
+
+因此模型本身的表情数据有效。
+
+
+==================================================
+十四、重要 Debug：为什么直接写 BlendShape 会失效
+==================================================
+
+曾尝试通过：
+
+SkinnedMeshRenderer.SetBlendShapeWeight(...)
+
+直接修改 Face 的 BlendShape。
+
+现象：
+
+代码可以执行，但运行时权重会被重新写回 0。
+
+原因定位：
+
+当前 VRM 1.0 模型的表情状态由 Vrm10Instance / UniVRM Runtime Expression 系统管理，
+并在运行过程中持续更新。
+
+因此直接写底层 BlendShape 会与 VRM Runtime 的所有权发生冲突。
+
+最终改为使用 UniVRM 1.0 的运行时接口：
+
+vrmInstance.Runtime.Expression.SetWeight(
+    ExpressionKey.Happy,
+    1.0f
+);
+
+该方案验证成功。
+
+结论：
+
+对当前 VRM 模型：
+应通过 VRM Runtime Expression API 驱动表情，而不是直接写 BlendShape。
+
+对未来普通 Blender/GLB 模型：
+如果没有 VRM Runtime 接管，则可以使用直接 BlendShape Driver。
+
+这也是后续建立 Driver 抽象层的重要原因。
+
+
+==================================================
+十五、Expression 执行层完成
+==================================================
+
+建立接口：
+
+IJessExpressionDriver
+
+职责：
+
+- SetExpression(string expressionName, float weight)
+- ClearExpressions()
+
+当前实际 Driver：
+
+JessVRMExpressionDriver
+
+职责：
+
+把 JESS 的语义表情：
+
+neutral
+angry
+fun
+happy
+sad
+surprised
+
+翻译为当前 VRM 1.0 的 ExpressionKey。
+
+当前映射包括：
+
+neutral    → ExpressionKey.Neutral
+angry      → ExpressionKey.Angry
+happy      → ExpressionKey.Happy
+sad        → ExpressionKey.Sad
+surprised  → ExpressionKey.Surprised
+fun        → ExpressionKey.Relaxed
+
+上层建立：
+
+JessExpressionController
+
+职责：
+
+- 接收 Brain 的语义 expression
+- 管理表情切换
+- 用 Coroutine 做平滑过渡
+- 不直接依赖 VRM API
+
+当前 Transition Duration：
+
+0.6 秒
+
+已验证：
+
+Brain 返回 sad
+↓
+JessBrain
+↓
+JessExpressionController
+↓
+JessVRMExpressionDriver
+↓
+Vrm10Instance Runtime Expression
+↓
+JESS 正确出现 sad 表情
+
+日志验证：
+
+[JESS Body] 收到 expression = sad
+[JESS Body] transition completed = sad
+
+视觉验证成功。
+
+
+==================================================
+十六、未来 BlendShape Driver 已预留
+==================================================
+
+已经创建：
+
+JessBlendShapeExpressionDriver
+
+但当前没有挂到场景中，也没有用于当前 VRM。
+
+其目标是：
+
+未来 Blender/GLB 模型到达后，可以根据“表情映射表”配置：
+
+JESS 语义表情
+↓
+一个或多个 Mesh / Shape Key
+↓
+各自目标权重
+
+例如：
+
+happy
+├─ mouth_smile  0.8
+└─ eye_happy    0.5
+
+Brain 仍然只需要输出：
+
+happy
+
+而不需要知道具体 Shape Key。
+
+未来模型交付约定：
+
+JESS_模型交付/
+├─ JESS.blend
+├─ JESS.glb
+└─ JESS_表情映射表.xlsx
+
+映射表约定字段：
+
+JESS 表情名
+Mesh/对象名
+Shape Key 名
+最终权重
+备注
+
+因此模型制作和 Unity 系统之间已经建立了基本接口标准。
+
+
+==================================================
+十七、Action 执行层骨架建立
+==================================================
+
+建立接口：
+
+IJessActionDriver
+
+职责：
+
+PlayAction(string actionName)
+StopAction()
+
+建立：
+
+JessActionController
+
+职责：
+
+接收 JESS 的语义 action，并把它交给当前 Action Driver。
+
+当前逻辑：
+
+action == "idle"
+→ StopAction()
+
+其他 action
+→ PlayAction(action)
+
+建立当前测试 Driver：
+
+JessAnimatorActionDriver
+
+职责：
+
+通过 Animator 执行动作。
+
+当前基础调用：
+
+animator.CrossFade(actionName, 0.2f);
+
+因此当前最简单的映射规则是：
+
+JESS action 名
+=
+Animator State 名
+
+这只是 V0 形式验证方案。
+
+未来可以进一步增加：
+- semantic action → clip/state 映射
+- Trigger / Parameter
+- 循环/一次性动作
+- 上半身 Layer
+- 动作打断策略
+
+但当前阶段暂不做内容细化。
+
+
+==================================================
+十八、Animator 测试资源与 testaction
+==================================================
+
+建立：
+
+Assets/Animations/JESS_Animator.controller
+
+Animator 中建立：
+
+idle
+testaction
+
+idle 为默认 State。
+
+建立：
+
+Assets/Animations/testaction.anim
+
+testaction 是纯技术测试动作，不代表最终 JESS 动作语义。
+
+测试内容：
+
+直接控制：
+
+Root
+→ J_Bip_C_Hips
+→ J_Bip_C_Spine
+→ Transform
+→ Rotation Y
+
+让身体向右旋转约 20°。
+
+该动作的目的只有一个：
+
+验证：
+
+代码
+→ Animator
+→ Animation Clip
+→ 骨骼
+
+这一执行链是否真实工作。
+
+
+==================================================
+十九、重要 Debug：Humanoid Avatar 与直接骨骼曲线
+==================================================
+
+初始状态：
+
+Animator Avatar = humanoid
+
+现象：
+
+testaction 没有按照预期让 Spine 的 Y Rotation 变化。
+
+反而模型出现类似半蹲的异常姿势。
+
+运行时观察到 Spine Rotation：
+
+X ≈ 1.466
+Y = 0
+Z = 0
+
+而手动在 Inspector 中把同一 Spine 的 Rotation Y 改为 20°，
+模型可以正确转动。
+
+因此骨骼本身没有问题。
+
+进一步测试：
+
+Animator Avatar = None
+
+结果：
+
+直接 Transform Animation Curve 正常作用于目标骨骼，
+testaction 可以稳定让身体向右转。
+
+当前工作基线因此设为：
+
+Jess Animator
+Controller = JESS_Animator
+Avatar = None
+
+这是当前测试模型 / 当前直接骨骼曲线方案下验证可工作的配置。
+
+注意：
+
+这不等于“JESS 永远不使用 Humanoid”。
+
+这里只能得出：
+
+在当前测试方案中，
+直接针对 VRM 骨骼 Transform 的 Animation Curve，
+在 Avatar=None 时能够正确工作。
+
+未来 Blender 正式动作进入后，需要根据实际导出方式重新决定：
+Humanoid / Generic / 直接骨骼动画的最终方案。
+
+
+==================================================
+二十、重要 Debug：Animator 与 VRM 表情可以同时工作
+==================================================
+
+排查 Animator 时曾临时关闭 Vrm10Instance。
+
+之后出现：
+
+Brain 仍然返回 sad
+Expression Controller 日志也正常
+但 Face 的 Fcl_ALL_Sorrow 权重保持 0
+视觉表情不再变化
+
+重新启用 Vrm10Instance 后，表情立即恢复。
+
+最终验证：
+
+Animator Avatar = None
++
+Vrm10Instance Enabled
+
+可以同时实现：
+
+身体 testaction 正常
++
+VRM facial expression 正常
+
+因此当前可用组合为：
+
+Animator
+- Controller = JESS_Animator
+- Avatar = None
+
+Vrm10Instance
+- Enabled
+
+这套组合已经通过实际 Play Mode 验证。
+
+
+==================================================
+二十一、Animator Controller 丢失问题
+==================================================
+
+调试过程中 Animator Controller 曾被临时设置为 None。
+
+按 T 时日志仍然出现：
+
+[JESS TEST] 按下 T，测试 testaction
+[JESS Animator Driver] 执行动作 = testaction
+
+但 Unity 报警：
+
+Animator does not have an AnimatorController
+
+这说明：
+
+代码层已经成功调用 Animator，
+但 Animator 自己没有状态机资产可执行。
+
+重新将：
+
+Assets/Animations/JESS_Animator.controller
+
+拖回 Jess Animator 的 Controller 字段后恢复正常。
+
+这一问题帮助确认了 Animator 链条的分层：
+
+代码调用成功
+≠
+Animator 一定具备可执行的 Controller / State / Clip。
+
+
+==================================================
+二十二、testaction Loop 问题
+==================================================
+
+testaction.anim 初始勾选：
+
+Loop Time
+
+现象：
+
+身体反复：
+
+右转
+→ 重置
+→ 右转
+→ 重置
+
+关闭 Loop Time 后：
+
+按 T
+→ 动作只播放一次
+→ 保持最后姿势
+
+因此确认：
+
+Loop Time 控制 Animation Clip 自身是否循环。
+
+它与 Animator State 是否切换到其他 State 是两个不同概念。
+
+
+==================================================
+二十三、Animator Transition：testaction → idle
+==================================================
+
+建立：
+
+testaction
+→ idle
+
+Transition 当前关键设置：
+
+Has Exit Time = On
+Exit Time = 1
+Transition Duration ≈ 0.1
+Transition Offset = 0
+Conditions = Empty
+
+含义：
+
+testaction 完整播放一次
+↓
+无需额外 Trigger / Condition
+↓
+自动进入 idle
+
+实际 Play 测试：
+
+按 T
+↓
+JESS 身体向右转
+↓
+testaction 播放完成
+↓
+自动转回默认姿势 / idle
+
+测试成功。
+
+因此当前已经验证：
+
+代码触发动作
+→ Animator 进入动作 State
+→ Clip 播放
+→ Exit Time 到达
+→ Transition
+→ 回到 idle
+
+完整的一次性动作生命周期成立。
+
+
+==================================================
+二十四、Brain → ActionController 正式接通
+==================================================
+
+此前 BrainResult 已经存在：
+
+public string action;
+
+但 action 只停留在 JSON 中，没有交给 Body。
+
+JessBrain 新增：
+
+[SerializeField]
+private JessActionController actionController;
+
+Brain 解析成功后新增：
+
+actionController.PlayAction(result.action);
+
+Unity Inspector 中：
+
+Jess Brain
+├─ Llm Client            → JESS_System (LLM Client)
+├─ Expression Controller → JESS_System (Jess Expression Controller)
+└─ Action Controller     → JESS_System (Jess Action Controller)
+
+Jess Action Controller
+└─ Action Driver Component
+   → JESS_System (Jess Animator Action Driver)
+
+Jess Animator Action Driver
+└─ Animator
+   → Jess (Animator)
+
+因此当前完整 action 链为：
+
+Qwen
+↓
+BrainResult.action
+↓
+JessBrain
+↓
+JessActionController
+↓
+JessAnimatorActionDriver
+↓
+Jess Animator
+↓
+Animator State / Animation Clip
+↓
+身体
+
+
+==================================================
+二十五、Brain→Action 首次连接时的 NullReference Debug
+==================================================
+
+首次修改 JessBrain 后出现红色报错：
+
+[JESS Brain] JSON解析失败:
+Object reference not set to an instance of an object
+
+同时日志已经显示：
+
+Brain JSON 返回成功
+expression = sad
+action = idle
+[JESS Body] 收到 expression = sad
+
+说明 JSON 本身已经成功解析。
+
+检查 Inspector 后发现：
+
+Jess Brain (Script)
+Action Controller = None (Jess Action Controller)
+
+即：
+
+代码中已经声明 actionController，
+但 Unity Inspector 没有给这个引用赋实际组件。
+
+因此执行：
+
+actionController.PlayAction(result.action);
+
+时发生 NullReferenceException。
+
+将 JESS_System 拖入 Jess Brain 的 Action Controller 槽位后，
+Unity 自动绑定同一 GameObject 上的 JessActionController。
+
+再次 Play：
+
+Brain action = idle
+↓
+JessActionController 收到 idle
+↓
+JessAnimatorActionDriver 回到 idle
+
+红色 NullReference 消失。
+
+结论：
+
+Brain → ActionController → ActionDriver → Animator
+正式接通。
+
+
+==================================================
+二十六、一个值得保留的 Debug 经验：Inspector 引用与代码变量
+==================================================
+
+例如：
+
+[SerializeField]
+private JessActionController actionController;
+
+它并不会“创建一个 JessActionController”。
+
+它只是声明：
+
+JessBrain 需要一个 JessActionController 的引用。
+
+真正由哪个 Unity Component 提供这个引用，
+需要在 Inspector 中连接。
+
+因此以后出现：
+
+Object reference not set to an instance of an object
+
+尤其是在刚新增 SerializeField 之后，
+优先检查 Inspector：
+
+是否仍然显示 None。
+
+本轮就是标准案例。
+
+
+==================================================
+二十七、当前 JESS_System 实际组件关系
+==================================================
+
+当前 JESS_System 上已经存在：
+
+MicrophoneRecorder
+LLMClient
+JessBrain
+JessExpressionController
+JessVRMExpressionDriver
+JessActionController
+JessAnimatorActionDriver
+
+当前核心连接：
+
+JessBrain
+├─ llmClient
+│  → LLMClient
+├─ expressionController
+│  → JessExpressionController
+└─ actionController
+   → JessActionController
+
+JessExpressionController
+└─ expressionDriverComponent
+   → JessVRMExpressionDriver
+
+JessVRMExpressionDriver
+└─ vrmInstance
+   → Jess / Vrm10Instance
+
+JessActionController
+└─ actionDriverComponent
+   → JessAnimatorActionDriver
+
+JessAnimatorActionDriver
+└─ animator
+   → Jess / Animator
+
+
+==================================================
+二十八、截至 2026-09-30 当前系统已经能做到什么
+==================================================
+
+【已经实际验证】
+
+1. Unity 可以调用 Qwen / qwen-plus。
+2. Qwen 可以按约定返回严格结构化的：
+   reply / expression / action。
+3. Unity 可以解析 BrainResult。
+4. Brain 可以自主选择当前白名单中的 expression。
+5. expression 可以真实驱动当前 VRM 模型的脸。
+6. 表情可以进行约 0.6 秒的平滑切换。
+7. 当前 VRM 表情与 Animator 身体动画可以同时工作。
+8. Unity 代码可以调用 Animator State。
+9. Animation Clip 可以真实驱动当前模型骨骼。
+10. 一次性动作可以播放完成后自动 Transition 回 idle。
+11. BrainResult.action 已经正式进入 Body Action 执行链。
+12. 当前 action=idle 已经完成 Brain→ActionController→Driver→Animator 的真实闭环。
+13. ASR 链路此前已验证 microphone → ASR → userText 可工作。
+14. 当前阿里云 NLS 语音 Token 可能因临时凭据过期而出现 HTTP 400；该问题暂不在本轮继续处理。
+
+因此当前 JESS 的“形式骨架”可以概括为：
+
+输入层（此前已验证）
+Microphone
+↓
+ASR
+↓
+userText
+
+大脑层
+userText / testInput
+↓
+JessBrain
+↓
+LLMClient
+↓
+Qwen
+↓
+BrainResult
+├─ reply
+├─ expression
+└─ action
+
+身体执行层
+expression
+↓
+JessExpressionController
+↓
+IJessExpressionDriver
+↓
+JessVRMExpressionDriver
+↓
+VRM Runtime Expression
+↓
+Face
+
+action
+↓
+JessActionController
+↓
+IJessActionDriver
+↓
+JessAnimatorActionDriver
+↓
+Animator
+↓
+Body
+
+
+==================================================
+二十九、目前“达到的水平”应如何准确描述
+==================================================
+
+当前已经不只是：
+
+“LLM 能在 Unity 里聊天”
+
+而是已经具备一个初步的：
+
+“结构化数字人行为控制框架”。
+
+Brain 的输出不再只有文本，
+而是能够同时生成：
+
+语言内容
++
+情绪/表情语义
++
+动作语义
+
+并由 Unity 中彼此独立的执行层接收。
+
+当前已经建立的关键工程能力是：
+
+1. LLM Provider 与 Character Brain 初步解耦。
+2. Brain 与具体模型实现初步解耦。
+3. 表情语义与 VRM API 之间存在 Driver 层。
+4. 动作语义与 Animator 之间存在 Controller / Driver 层。
+5. 当前模型可以被未来模型替换，而不要求推翻整个 Brain 接口。
+6. 表情与身体动作已经可以作为两个独立通道被 Brain 控制。
+7. Unity Animator 的 State / Clip / Transition 基础执行链已经被实际验证。
+
+因此现在更接近：
+
+“JESS V0 Runtime Architecture / Interaction Skeleton”
+
+而不是最终产品表现。
+
+当前的价值主要在“系统形式已经成立”，
+不是“内容已经丰富”。
+
+
+==================================================
+三十、当前明确没有完成的内容
+==================================================
+
+以下内容不要误写成已经完成：
+
+【1】正式 JESS 动作库
+尚未完成。
+
+目前 testaction 只是技术测试动作。
+正式 action vocabulary 仍然只有：
+
+idle
+
+【2】正式角色人格
+尚未完成。
+
+当前 Prompt 只是测试级角色描述。
+
+【3】正式 Blender/GLB 模型接入
+尚未完成。
+
+当前实际运行模型仍是 VRM 1.0 Jess。
+
+【4】未来 GLB BlendShape Driver 的真实模型验证
+尚未完成。
+
+JessBlendShapeExpressionDriver 已预留，
+但没有在未来 GLB 上测试。
+
+【5】TTS
+当前本轮未完成端到端接入。
+
+【6】完整语音闭环
+ASR 曾经工作，但当前临时 NLS Token 可能已过期。
+因此当前不能把“今天的运行状态”描述为完整语音闭环稳定可用。
+
+【7】正式动作映射机制
+当前 AnimatorActionDriver 仍然使用：
+
+animator.CrossFade(actionName, 0.2f)
+
+即 action 名直接对应 Animator State 名。
+
+这是 V0 简化方案。
+
+【8】动作中断、并发、优先级
+尚未设计。
+
+【9】多层 Animator / 上半身动作 / IK / Procedural Motion
+尚未设计。
+
+【10】Expression Controller 的复杂打断情况
+当前正常的一次一条 Brain response 已验证。
+中途快速打断 transition 的复杂情况尚未系统压力测试。
+
+
+==================================================
+三十一、当前最重要的架构边界
+==================================================
+
+目前应继续坚持：
+
+Brain 不碰：
+- Bone name
+- BlendShape name
+- VRM ExpressionKey
+- Animator 具体实现
+
+Brain 只说：
+
+reply = ...
+expression = ...
+action = ...
+
+Controller 负责：
+
+“JESS 想做什么”
+
+Driver 负责：
+
+“当前这个模型怎么做到”
+
+Model / Animator / BlendShape / VRM 负责：
+
+“实际执行”
+
+
+==================================================
+三十二、下一阶段方向
+==================================================
+
+当前阶段不急于制作大量正式动作或打磨具体表情内容。
+
+更合理的路线是继续完成“形式搭建”，
+确保整个系统的模块边界、替换能力和端到端接口稳定。
+
+之后再逐步进入内容层：
+
+- JESS 人格与语言风格
+- 正式 expression mapping
+- 正式 action vocabulary
+- Blender 动作资产
+- TTS / Voice
+- ASR Token 自动获取/刷新
+- 更自然的待机、动作混合与行为节奏
+- 最终 Blender/GLB 模型替换
+- 记忆 / 状态 / 场景上下文等更高层能力
+
+当前不需要为了“看起来更丰富”而过早填充动作内容。
+
+
+==================================================
+当前里程碑（2026-09-30）
+==================================================
+
+ASR / 耳朵：
+历史链路已验证
+当前 NLS 临时 Token 可能过期，待后续处理
+
+Brain / 大脑：
+Qwen API                          ✅
+结构化 JSON                       ✅
+reply                             ✅
+expression                        ✅
+action                            ✅
+Brain → Expression Controller     ✅
+Brain → Action Controller         ✅
+
+Expression / 表情：
+语义 Expression Controller        ✅
+IJessExpressionDriver             ✅
+VRM Expression Driver             ✅
+VRM Runtime 表情实际执行           ✅
+平滑 transition                   ✅
+未来 BlendShape Driver 骨架        ✅（未在 GLB 实测）
+
+Action / 身体：
+IJessActionDriver                 ✅
+JessActionController              ✅
+Animator Action Driver            ✅
+Animator Controller               ✅
+测试 Animation Clip               ✅
+代码触发 State                    ✅
+一次性动作                        ✅
+动作结束自动回 idle               ✅
+Brain → Action → Animator 闭环     ✅
+正式动作内容                       ⏳
+
+模型抽象：
+JESS_Character 稳定模型槽位        ✅
+当前 VRM Driver                    ✅
+未来 GLB/BlendShape 路径已预留      ✅（待实模验证）
+
+总体判断：
+
+JESS 已从“LLM 返回结构化 JSON”
+推进到
+“Brain 可以通过独立的 Expression / Action 执行层真实控制 Unity 角色”。
+
+当前完成的是 V0 运行时形式骨架，
+不是最终角色内容。
+
+##################################################################
+END OF 2026-09-30 CONTINUATION
+##################################################################

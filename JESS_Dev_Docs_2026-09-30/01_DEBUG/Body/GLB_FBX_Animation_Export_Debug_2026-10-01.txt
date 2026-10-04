@@ -1,0 +1,404 @@
+JESS Debug Log 03
+标题：独立 FBX Animation 驱动 GLB 时模型冲向 Camera，以及 Key All Bones 全骨架烘焙问题
+日期：2026-10-01
+项目：JESS 数字人
+环境：Blender 4.4.1 / Unity 2022.3.62f2c1 / Generic Animator / GLB + FBX
+
+============================================================
+0. 本次 Debug 目标
+============================================================
+
+验证新的资产生产方式：
+
+角色本体：Blender → GLB → Unity
+身体动作：Blender / 后续 Maya → FBX Animation → Unity
+
+希望独立 FBX Animation Clip 可以驱动 Unity 中已经存在的同骨架 GLB，
+而不要求每个动作重新导出完整角色。
+
+============================================================
+1. GLB 基础验证
+============================================================
+
+从 Blender 正式导出真实 GLB：
+
+jesss.glb
+
+与此前“VRM 改后缀为 .glb”的测试文件区分。
+
+Unity 中确认：
+- GLB 正常导入；
+- 骨架存在；
+- J_Bip 骨骼命名保留；
+- Face 上 BlendShapes 存在；
+- Blender 自定义 Shape Key“假笑”可在 Unity Inspector 中手动驱动。
+
+因此：
+
+Blender Shape Key
+→ GLB
+→ Unity BlendShape
+
+已验证。
+
+============================================================
+2. 最小身体动画测试
+============================================================
+
+Blender 中：
+
+Armature → Pose Mode
+选择：
+J_Bip_L_LowerArm
+
+只对该骨骼制作最小 Rotation 动画。
+
+Action Editor 检查：
+
+ArmatureAction
+└─ J_Bip_L_LowerArm
+
+确认 Blender 源 Action 中只有目标小臂骨骼存在关键帧，
+没有给整套骨架手动 K 动画。
+
+============================================================
+3. 第一次 FBX 导出后的异常
+============================================================
+
+第一次 FBX 导出后，Unity 中 FBX Preview：
+角色站在原地，小臂动画可正常播放。
+
+但将同一个 Animation Clip 放入 GLB 的 Animator：
+
+Controller = GLB_Test_Controller
+Avatar = None
+
+进入 Play 后：
+- 小臂确实受到动画驱动；
+- 但 GLB 部分结构突然冲到 Camera 前；
+- Game View 出现大块黑灰几何体，视觉上最初像 Camera 突然换了视角。
+
+============================================================
+4. Camera 排查
+============================================================
+
+最初怀疑：
+- FBX 自带 Camera 抢占 Game View；
+- Main Camera 在 Play 时被脚本移动；
+- Main Camera 父节点发生移动。
+
+逐项验证：
+
+1. 删除 Hierarchy 中 FBX Scene Instance；
+2. FBX 内部 Camera / Light 仅作为 Project Asset 子对象存在，不参与 Scene；
+3. Main Camera 为 Hierarchy 顶层对象，无父节点；
+4. Play 前后 Main Camera Transform 数值不变；
+5. 禁用 Main Camera 后，场景无其他 Camera 渲染；
+6. 禁用 jesss 的 Animator 后，冲到 Camera 前的异常立即消失。
+
+结论：
+Camera 本身没有移动。
+异常来自 Animator 播放 FBX Clip 后 GLB 的 Transform / 骨骼状态变化。
+
+============================================================
+5. Unity Animation Clip 的异常信号
+============================================================
+
+第一次 FBX 的 Animation Clip Inspector 显示约：
+
+Curves Pos:        171
+Quaternion:        171
+Scale:             171
+
+但 Blender Action Editor 已确认：
+实际只给 J_Bip_L_LowerArm 制作了关键帧。
+
+这说明：
+全骨架 Transform 曲线不是动画制作阶段产生，
+而是在 FBX 导出 / 烘焙阶段写入。
+
+============================================================
+6. 排查 Unity Resample Curves
+============================================================
+
+尝试在 Unity FBX Import Settings 中：
+
+Resample Curves = OFF
+Apply
+
+结果：
+GLB 仍然在 Play 时出现异常。
+
+因此：
+Unity Resample Curves 不是主要根因。
+
+============================================================
+7. 根因定位：Blender Key All Bones
+============================================================
+
+检查 Blender FBX Export → Animation：
+
+Key All Bones = ON
+NLA Strips    = ON
+All Actions   = ON
+
+其中 Key All Bones 会在导出动画时给骨架中的骨骼写入关键数据，
+即使 Blender Action 中并未手动给这些骨骼制作动画。
+
+这与 Unity 中出现 171 组 Pos / Rotation / Scale 曲线的现象对应。
+
+同时第一次导出 Object Types 包含：
+Empty / Camera / Lamp / Armature / Mesh / Other
+
+因此 FBX 中还额外携带了 Blender Camera 和 Light。
+
+============================================================
+8. 修正后的 clean FBX 导出
+============================================================
+
+建立 clean test：
+
+Object Types：
+- Armature = ON
+- Mesh     = ON
+- Empty    = OFF
+- Camera   = OFF
+- Lamp     = OFF
+- Other    = OFF
+
+Animation：
+- Key All Bones = OFF
+- NLA Strips    = OFF
+- All Actions   = OFF
+- Force Start/End Keying 保持当前设置
+- Sampling Rate = 1.00
+- Simplify      = 1.00
+
+导出：
+cleanjess.fbx
+
+============================================================
+9. clean FBX 验证结果
+============================================================
+
+重新导入 Unity 后：
+原先约 171 / 171 / 171 的全骨架 Transform 曲线消失。
+大部分相关统计为 0，仅剩少量与实际动画有关的曲线。
+
+新建：
+cleantest.controller
+
+将 clean Animation Clip 作为测试 State，
+赋给 jesss.glb 的 Animator：
+
+Controller = cleantest
+Avatar = None
+
+Play 结果：
+- GLB 保持原位置；
+- 不再冲到 Camera 前；
+- 只有 J_Bip_L_LowerArm 发生运动；
+- 动画可以稳定驱动 GLB。
+
+因此确认：
+
+GLB 本体
++
+独立 FBX Animation Clip
++
+Generic / Avatar=None
+
+在同骨架条件下可工作。
+
+============================================================
+10. 当前剩余问题：旋转方向不完全一致
+============================================================
+
+虽然 clean FBX 已只驱动目标小臂，
+但 Unity / GLB 中小臂的旋转方向与 Blender 中预期不完全一致。
+
+Blender：
+小臂向上抬。
+
+Unity / GLB：
+当前更像向下弯。
+
+该问题尚未定位。
+
+当前可能检查方向：
+- Bone Local Axis
+- Rest Pose / Bind Pose
+- Blender → FBX 坐标转换
+- GLB 与 FBX 对同一骨架局部旋转基准的解释
+- 后续 Maya → FBX 往返后的轴向一致性
+
+注意：
+这个问题不否定当前资产管线验证。
+目前已证明独立 FBX Clip 可以只驱动目标骨骼，且不会破坏 GLB 整体 Transform。
+
+============================================================
+11. 表情状态说明
+============================================================
+
+本轮 Play 中：
+原 VRM 会继续响应已有 Brain expression 链，
+新 GLB 不会自动跟随 Brain 做表情。
+
+原因不是 GLB 没有 BlendShape。
+
+GLB BlendShape 已手动验证可用。
+当前只是：
+现有 JessVRMExpressionDriver 仍绑定原 VRM Runtime Expression，
+尚未建立 / 切换到新 GLB 的 BlendShape Expression Driver。
+
+因此当前应区分：
+
+表情资产能力：已验证
+Brain → GLB 表情控制：尚未接入
+
+============================================================
+12. 本轮最终结论
+============================================================
+
+已验证：
+
+Blender
+→ GLB 角色本体
+→ Unity
+
+Blender Action
+→ clean FBX Animation
+→ Unity Animator
+→ 同骨架 GLB
+
+成立。
+
+本轮最关键的坑：
+
+FBX 动画导出时不要默认开启 Key All Bones，
+否则未参与动画的整套骨架 Transform 也可能被写入 Clip。
+
+当该 Clip 用于另一个独立导出的同骨架模型时，
+这些无关 Transform 曲线可能覆盖模型自己的基础姿态 / Transform，
+表现为模型爆开、位移、冲向 Camera 等异常。
+
+============================================================
+13. 以后遇到类似问题的 Checklist
+============================================================
+
+当“FBX Preview 正常，但同一个 Clip 套到 GLB 后模型炸掉”时：
+
+1. 先确认 Camera 是否真的移动；
+2. 禁用 Animator，确认异常是否由动画触发；
+3. 检查 Blender Action Editor：到底哪些骨骼真的有 Key；
+4. 检查 Unity Clip 的 Pos / Quaternion / Scale 曲线数量；
+5. 检查 Blender FBX Export 的 Key All Bones；
+6. 单动作测试关闭 NLA Strips / All Actions；
+7. 不把 Camera / Light 带入动画 FBX；
+8. 重新导入后先看曲线数量，再挂到正式 GLB；
+9. 最后再处理 Local Axis / Rest Pose 等动作方向问题。
+
+本轮最关键的一句：
+
+“FBX 自己播放正常”不等于“这个 Clip 是干净、可复用的独立动作资产”。
+
+============================================================
+14. 2026-10-05 Follow-up：GLB BlendShape Driver 正式接入
+============================================================
+
+Git 节点：
+
+26f02c0 configure Blender expression mappings
+0903302 Merge pull request #3 from feature/blender-expression
+
+本次 Follow-up 不再只是验证“GLB 中存在 BlendShape”，
+而是把 Blender / GLB BlendShape 接入实际 Expression 执行链。
+
+当前链路：
+
+JessBrain.expression
+→ JessExpressionController
+→ IJessExpressionDriver
+→ JessBlendShapeExpressionDriver
+→ GLB SkinnedMeshRenderer
+→ BlendShape
+
+SampleScene 中：
+JessExpressionController.expressionDriverComponent
+已从 JessVRMExpressionDriver 切换为 JessBlendShapeExpressionDriver。
+
+JessVRMExpressionDriver 组件与脚本仍保留，
+但不再是当前 Controller 选择的 Driver。
+
+============================================================
+15. 当前 Blender 表情映射
+============================================================
+
+当前 Scene 实际序列化配置为：
+
+neutral
+→ Fcl_ALL_Neutral
+→ targetWeight = 1
+
+happy
+→ Fcl_ALL_Joy
+→ targetWeight = 1
+
+fake_smile
+→ 假笑
+→ targetWeight = 1
+
+这三项映射都指向当前 GLB 的 SkinnedMeshRenderer。
+
+注意：
+“配置存在”与“Brain 当前会自动生成该 expression”是两件事。
+
+JessBrain 当前白名单仍为：
+neutral / angry / fun / happy / sad / surprised。
+
+fake_smile 当前不在 Brain 白名单中。
+
+============================================================
+16. fake_smile 临时强制验证与清理
+============================================================
+
+开发过程中曾临时强制 expression = fake_smile，
+用于验证：
+
+JessExpressionController
+→ JessBlendShapeExpressionDriver
+→ “假笑” BlendShape
+
+运行结果已确认 fake_smile 映射可以驱动模型。
+
+该强制逻辑只用于临时 Play Mode 验证，
+验证完成后已删除，不应重新加入正式代码。
+
+当前代码与 Git history 核对结果：
+- fake_smile 的持久记录只存在于 SampleScene 映射；
+- Assets/scripts 中不存在 SetExpression("fake_smile")；
+- 提交历史中没有保留临时强制 fake_smile 的功能代码。
+
+因此对这项验证的准确表述是：
+
+fake_smile Mapping 已配置并做过人工运行验证；
+临时强制调用未进入 main；
+当前正常 Brain 流程不会自动选择 fake_smile。
+
+============================================================
+17. 与 2026-10-01 结论相比发生的变化
+============================================================
+
+2026-10-01 本文第 11 节写的是：
+
+表情资产能力：已验证
+Brain → GLB 表情控制：尚未接入
+
+截至 2026-10-05，应更新为：
+
+表情资产能力：已验证
+BlendShape Driver 接入：已完成
+JessExpressionController 切换：已完成
+neutral / happy / fake_smile Mapping：已配置
+fake_smile 临时强制运行验证：已完成，临时代码已删除
+完整 Brain 表情词表与全部 Mapping：尚未完成

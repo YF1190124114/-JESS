@@ -1,0 +1,241 @@
+JESS 模型替换 Runbook
+来源：2026-09-30 模型可替换接口与 Blender 接入记录
+用途：以后真正收到队友模型时按此操作，不需要翻 Debug Log。
+最近核对：2026-10-05
+
+==================================================
+A. 队友交付包
+==================================================
+
+JESS_模型交付/
+├─ JESS.blend
+├─ JESS.glb
+└─ JESS_表情映射表.xlsx
+
+JESS.blend：
+Blender 源文件，用于以后继续修改。
+
+JESS.glb：
+Unity 实际接入候选模型；应包含正确导出的模型、骨骼和 Shape Keys。
+
+JESS_表情映射表.xlsx：
+建议字段：
+JESS 表情名 | Mesh/对象名 | Shape Key 名 | 最终权重 | 备注
+
+第一批至少覆盖：
+neutral / happy / sad / angry / surprised / fun
+
+==================================================
+B. Unity 当前挂载位置
+==================================================
+
+2026-09-30 时使用过：
+JESS_Character → Current Model
+
+但当前 SampleScene 已按模块调整为：
+
+JessPerception
+JessBrain
+JessOutput
+├─ Speech
+└─ Body
+   ├─ Expression
+   └─ Action
+
+当前旧 VRM Jess 与 Blender / GLB jesss 相关实例仍保留，
+并挂在 Expression / Action 相关节点下。
+
+因此当前换模前必须先在 Inspector 确认实际引用：
+- JessExpressionController.expressionDriverComponent；
+- JessBlendShapeExpressionDriver.expressions 中的 Mesh；
+- JessVRMExpressionDriver.vrmInstance；
+- JessAnimatorActionDriver.animator；
+- Action 节点下的 Animator / Model；
+- Brain 对 Expression / Action / Speech Controller 的引用。
+
+不要再按旧文档假设一定存在 JESS_Character 根节点。
+不要为了换模删除 Brain、Speech、Controller、旧 VRM 或其他 fallback 资源。
+
+==================================================
+C. 表情接入
+==================================================
+
+Brain 仍只输出语义 expression。
+
+如果新模型使用普通 Shape Keys / BlendShapes：
+
+JessExpressionController
+→ JessBlendShapeExpressionDriver
+→ Expression Mapping
+→ 一个或多个 Shape Keys
+
+一个 semantic expression 可以由多个 Shape Key 共同组成。
+
+例如：
+happy
+├─ mouth_smile 0.8
+└─ eye_happy   0.5
+
+根据真实 GLB 和映射表配置 Driver，
+不要提前猜 Mesh / Shape Key 名。
+
+当前 SampleScene 已配置：
+
+neutral    → Fcl_ALL_Neutral → 1
+happy      → Fcl_ALL_Joy     → 1
+fake_smile → 假笑            → 1
+
+当前 JessExpressionController 已指向 JessBlendShapeExpressionDriver。
+JessVRMExpressionDriver 仍保留，但不是当前 Controller 选中的 Driver。
+
+fake_smile 已经通过临时强制 expression 做过运行验证。
+临时代码已经删除；不要把该强制调用重新加入正式代码。
+
+JessBrain 当前 expression 白名单不包含 fake_smile，
+所以若以后希望 Brain 正常生成 fake_smile，
+应通过单独需求评审与 PR 修改语义词表，而不是再次硬编码强制表情。
+
+==================================================
+D. 动作接入
+==================================================
+
+队友正式动作资产出现后：
+
+1. 导入实际 Animation Clip / Blender Action。
+2. 根据实际模型决定 Animator / Avatar / 动画方式。
+3. 建立 Animator State 或后续动作映射。
+4. 将 JessActionController 指向适合新模型的 Action Driver。
+5. 再根据真实资产确定 Brain action vocabulary。
+
+不要提前把 wave / nod 等示例动作写死进 Brain。
+
+==================================================
+E. 换模验收
+==================================================
+
+逐层测试：
+
+1. 新模型在当前实际挂载节点下显示正常。
+2. 表情 Driver 能单独控制表情。
+3. Action Driver 能单独执行动作。
+4. Brain → expression → 新模型成功。
+5. Brain → action → 新模型成功。
+6. 最后再做完整交互测试。
+
+当前 GLB 表情回归测试应至少覆盖：
+- neutral → Fcl_ALL_Neutral
+- happy → Fcl_ALL_Joy
+- fake_smile → 假笑
+
+验证 fake_smile 时使用临时测试入口或 Inspector 驱动即可，
+验证完成后确认 scripts 中没有强制 fake_smile 的残留代码。
+
+注意：
+当前 VRM 上得到的 Avatar=None 结论，只针对当前直接骨骼 Transform 测试方案。
+正式 Blender/GLB 模型到达后，要根据真实动画资产重新判断 Humanoid / Generic / 直接骨骼动画方案。
+
+==================================================
+F. 独立 FBX 动画导出规范（2026-10-01 验证）
+==================================================
+
+目标：
+角色本体保持为 GLB，身体动作作为独立 FBX Animation Clip 接入 Unity。
+
+当前已验证：
+同一套 J_Bip 骨架下，Generic / Avatar=None 的 Animator 可以用独立 FBX Clip 驱动 GLB。
+
+--------------------------------------------------
+Blender 单动作测试导出
+--------------------------------------------------
+
+FBX Export → Object Types：
+
+ON：
+- Armature
+- Mesh
+
+OFF：
+- Empty
+- Camera
+- Lamp
+- Other
+
+Animation：
+
+- Key All Bones = OFF
+- NLA Strips = OFF（当前单 Action 测试）
+- All Actions = OFF（当前单 Action 测试）
+- Sampling Rate = 1.00
+- Simplify = 1.00
+
+核心要求：
+不要让未参与动画的整套骨架被自动写入 Position / Rotation / Scale 曲线。
+
+--------------------------------------------------
+Unity 导入后先验收 Clip
+--------------------------------------------------
+
+不要一导入就直接挂到正式模型。
+
+先检查 Animation Clip Inspector：
+
+1. 曲线数量是否与实际动画规模基本相符；
+2. 如果只 K 了一根骨骼，却出现上百个 Pos / Quaternion / Scale 曲线，先停止接入；
+3. 检查 FBX Export 是否开启 Key All Bones；
+4. 在 FBX Preview 中确认动作本身可播放；
+5. 再用独立测试 Animator Controller 驱动 GLB。
+
+当前 clean test 已验证：
+关闭 Key All Bones 后，无关全骨架 Transform 曲线基本消失，GLB 不再异常冲向 Camera，仅目标小臂运动。
+
+--------------------------------------------------
+Animator 当前测试配置
+--------------------------------------------------
+
+Animator：
+- Controller = 测试 Controller / 正式动作 Controller
+- Avatar = None
+
+当前方案属于：
+同骨架直接 Transform / Generic 风格动画。
+
+不要把当前结论直接等同于 Humanoid Retargeting。
+后续如果正式改用 Humanoid，需要重新验证 Avatar / Retargeting 行为。
+
+--------------------------------------------------
+当前待验证：旋转方向一致性
+--------------------------------------------------
+
+clean FBX 已能只驱动目标骨骼，
+但 Blender 中“向上抬”的小臂动作在 Unity / GLB 中当前更像“向下弯”。
+
+后续检查：
+- Local Axis
+- Rest Pose / Bind Pose
+- FBX 坐标转换
+- Maya 往返轴向一致性
+
+在该问题解决前，
+不要把当前测试动作的视觉方向当成正式动作制作规范。
+
+==================================================
+G. Maya 动画往返最小测试
+==================================================
+
+在正式批量制作动作前，先做一次最小往返：
+
+JESS 骨架 / 角色测试文件
+→ Maya
+→ 任意一个明显的小动作
+→ FBX Animation
+→ Unity
+→ jesss.glb
+
+要求：
+- J_Bip 骨骼名称不改；
+- 骨骼层级不改；
+- 不先规划正式动作库；
+- 先证明 Maya 导出的 FBX 能稳定驱动现有 GLB；
+- 同时检查旋转方向是否与 Maya 中一致。
+
+通过后再确定正式身体动画生产规范。

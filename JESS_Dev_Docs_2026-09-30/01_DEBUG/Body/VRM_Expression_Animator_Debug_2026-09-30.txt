@@ -1,0 +1,591 @@
+JESS Debug Log 02
+标题：表情被 VRM Late Update 覆盖，以及 Humanoid Avatar 吃掉骨骼 Transform 动画
+日期：2026-09-30
+项目：JESS 数字人
+环境：Unity 2022.3.62f2c1 / UniVRM / VRM 1.0
+
+============================================================
+0. 本次 Debug 的两条链
+============================================================
+
+这轮调试实际上解决了两个不同但非常典型的问题：
+
+A. 表情：
+直接写 SkinnedMeshRenderer BlendShape，运行时却被 VRM 系统改回去。
+
+B. 动作：
+Animation Clip 明明有 Spine Rotation Y 曲线，骨骼运行时却不按这条曲线旋转。
+
+两个问题表面上都像：
+“Unity 明明写进去了，为什么模型不听？”
+
+但根因不同。
+
+============================================================
+PART A：表情控制 Debug
+============================================================
+
+1. 初始目标
+
+希望 Brain 返回：
+
+{
+  "reply": "...",
+  "expression": "happy",
+  "action": "idle"
+}
+
+然后 Jess 自动做出对应表情。
+
+当前 Face 上确认存在 BlendShapes：
+
+neutral   → Fcl_ALL_Neutral
+angry     → Fcl_ALL_Angry
+fun       → Fcl_ALL_Fun
+happy     → Fcl_ALL_Joy
+sad       → Fcl_ALL_Sorrow
+surprised → Fcl_ALL_Surprised
+
+手动在 Inspector 中：
+
+Fcl_ALL_Joy = 100
+
+Jess 可以正常微笑。
+
+因此：
+Mesh、BlendShape 和表情资产本身没有问题。
+
+------------------------------------------------------------
+2. 第一个异常
+------------------------------------------------------------
+
+尝试在运行时直接调用：
+
+SkinnedMeshRenderer.SetBlendShapeWeight(...)
+
+结果：
+数值会被重新写回 0，表情无法稳定保持。
+
+最初容易误判为：
+- SetBlendShapeWeight 没执行；
+- BlendShape Index 错；
+- Unity 没刷新；
+- 表情名称错误。
+
+但手动 Inspector 已证明 BlendShape 本身有效。
+
+------------------------------------------------------------
+3. 根因
+------------------------------------------------------------
+
+当前 Jess 是 VRM 1.0 模型，并挂有：
+
+Vrm10Instance
+
+它拥有自己的 Runtime Expression 系统，并在 Late Update 阶段维护 VRM 表情状态。
+
+因此直接改 SkinnedMeshRenderer，相当于绕过 VRM 的表情管理层。
+
+我们写进去的 BlendShape Weight 随后又会被 VRM Runtime Expression 更新覆盖。
+
+所以：
+
+直接 BlendShape 写入
+        ↓
+暂时改变
+        ↓
+Vrm10Instance / Runtime Expression 更新
+        ↓
+被覆盖
+
+------------------------------------------------------------
+4. 正确控制方式
+------------------------------------------------------------
+
+改为使用 UniVRM 1.0 Runtime API：
+
+using UniVRM10;
+
+vrmInstance.Runtime.Expression.SetWeight(
+    ExpressionKey.Happy,
+    1.0f
+);
+
+已验证可用的语义包括：
+
+ExpressionKey.Happy
+ExpressionKey.Neutral
+ExpressionKey.Angry
+ExpressionKey.Sad
+ExpressionKey.Surprised
+
+当前 fun 映射为：
+
+ExpressionKey.Relaxed
+
+------------------------------------------------------------
+5. 表情过渡问题
+------------------------------------------------------------
+
+早期 smoothing 版本还出现过一次混合异常：
+
+为了从旧表情切换到新表情，错误地把所有非目标表情设置为：
+
+1 - targetWeight
+
+这会导致切换过程中其他表情一起被抬高，
+出现短暂微笑、混脸等现象。
+
+修正后采用：
+
+旧表情：startWeight → 0
+新表情：0 → 1
+
+并使用 SmoothStep 控制插值。
+
+最终：
+
+old expression
+      ↓ fade out
+
+new expression
+      ↑ fade in
+
+过渡时间目前约：
+0.6 s
+
+------------------------------------------------------------
+6. 表情链最终验证
+------------------------------------------------------------
+
+测试用户输入：
+
+“你居然把我最喜欢的杯子摔碎了，而且一句道歉都没有。”
+
+Qwen 返回：
+expression = sad
+
+Unity Log：
+[JESS Body] 收到 expression = sad
+[JESS Body] transition completed = sad
+
+视觉结果：
+Jess 平滑进入 sad。
+
+因此已确认：
+
+用户输入
+→ JessBrain
+→ Qwen
+→ BrainResult.expression
+→ JessExpressionController
+→ JessVRMExpressionDriver
+→ UniVRM Runtime Expression
+→ Jess Face
+
+整条链工作。
+
+============================================================
+PART B：动作控制 Debug
+============================================================
+
+7. 初始判断：当前 VRM 有没有自带动作？
+============================================================
+
+检查 Jess：
+
+- 有 Humanoid 骨骼映射；
+- 有 Animator；
+- Avatar = humanoid；
+- 但 Animator Debug 中 Clip Count = 0；
+- 当前 VRM 没有可直接调用的身体 Animation Clip。
+
+结论：
+
+当前模型“有骨架，可以动画”，
+但并不等于“自带身体动作”。
+
+因此创建最小测试动画：
+
+Assets/Animations/testaction.anim
+
+目的不是做正式动作，
+而是证明：
+
+Animator
+→ Animation Clip
+→ Bone Transform
+
+能否跑通。
+
+============================================================
+8. testaction 测试
+============================================================
+
+创建：
+
+JESS_Animator.controller
+
+最初：
+idle = 默认 State
+
+创建：
+testaction.anim
+
+对骨骼：
+
+Root
+→ J_Bip_C_Hips
+→ J_Bip_C_Spine
+→ Transform
+→ Rotation
+
+录制 Rotation Y：
+
+0 → 20°
+
+手动直接修改：
+
+J_Bip_C_Spine
+Transform
+Rotation Y = 20
+
+结果：
+Jess 明确向一侧旋转。
+
+因此：
+骨骼本身允许旋转。
+
+------------------------------------------------------------
+9. 异常：曲线有，模型却不转
+------------------------------------------------------------
+
+Animation Clip Inspector 确认：
+
+Length: 1.000
+60 FPS
+Euler: 1
+Curves Total: 3
+Stream: 3
+
+Animation Window 中也能看到黄色 Rotation.y 曲线从约 0 上升到约 20。
+
+但：
+- Preview / Scrub 时模型没有按预期旋转；
+- Spine Inspector 的 Y 仍为 0。
+
+因此 Clip 并不是空的。
+
+------------------------------------------------------------
+10. 排查 VRMInstance
+------------------------------------------------------------
+
+怀疑：
+
+Vrm10Instance Late Update
+是否也像表情一样覆盖骨骼？
+
+测试：
+暂时禁用 Vrm10Instance。
+
+结果：
+仍然不转。
+
+因此：
+“VRMInstance 在 Late Update 把 Spine Y 改回去”
+不是这次动作问题的主要根因。
+
+------------------------------------------------------------
+11. 排查 Animator State
+------------------------------------------------------------
+
+发现 Animator 中：
+
+Entry → idle
+
+testaction 虽然存在，但最初没有真正进入播放路径。
+
+建立：
+idle → testaction
+
+随后为了排除 Transition 条件本身的干扰，
+直接把：
+
+testaction
+
+设为 Layer Default State。
+
+此时：
+
+Entry → testaction
+
+testaction 变为橙色。
+
+进入 Unity Play 后，
+模型确实发生了变化。
+
+但是出现了新的关键现象：
+
+Jess 从 T Pose 变成“半蹲”，
+却没有按预期向侧面旋转。
+
+这证明：
+
+Animator 已经在驱动模型。
+
+所以问题已经从：
+
+“Animator 有没有工作？”
+
+缩小为：
+
+“为什么这个 Animation Clip 没按我们录制的原始骨骼 Transform 方式工作？”
+
+------------------------------------------------------------
+12. 运行时检查 Spine
+------------------------------------------------------------
+
+Play 状态下查看：
+
+J_Bip_C_Spine
+Transform Rotation
+
+实际：
+
+X = 1.466
+Y = 0
+Z = 0
+
+而我们期望的关键曲线是：
+
+Y ≈ 20
+
+因此 Animator 运行了，
+但并没有把 testaction 中期望的 Spine Y Transform 直接应用到这根骨骼。
+
+------------------------------------------------------------
+13. 关键假设：Humanoid Avatar
+------------------------------------------------------------
+
+Jess Animator 当时配置：
+
+Controller = JESS_Animator
+Avatar = humanoid
+
+而 testaction 是我们直接针对：
+
+J_Bip_C_Spine Transform Rotation
+
+录制的骨骼 Transform / Euler 曲线。
+
+这两者属于不同的动画控制思路：
+
+Humanoid Avatar
+→ Unity Humanoid / Retargeting / Avatar 姿态体系
+
+直接骨骼 Transform Clip
+→ 按具体 Transform Path 写骨骼旋转
+
+因此怀疑：
+Humanoid Avatar 正在参与骨骼姿态处理，
+导致我们直接录制的原始 Transform 曲线没有按预期落到 J_Bip_C_Spine 上。
+
+------------------------------------------------------------
+14. 决定性实验
+------------------------------------------------------------
+
+只改一个变量。
+
+保持：
+
+Controller = JESS_Animator
+testaction = Default State
+Animation Clip 不变
+骨骼不变
+VRM 模型不变
+
+只把 Animator：
+
+Avatar = humanoid
+
+改成：
+
+Avatar = None
+
+然后重新 Play。
+
+结果：
+
+Jess 正常按照 testaction 的 Spine Y 曲线旋转。
+
+重复进入 Play：
+稳定能够旋转。
+
+============================================================
+15. 当前根因结论
+============================================================
+
+这次问题不是：
+
+× VRM 骨骼不允许旋转
+× testaction 是空 Clip
+× Rotation Y 曲线没录进去
+× Animator 完全没工作
+× Vrm10Instance 把骨骼覆盖回去
+
+实际关键点是：
+
+当前 Animator 使用 Humanoid Avatar 时，
+我们直接针对 VRM 原始骨骼 Transform 录制的 testaction，
+没有按照预期直接驱动 J_Bip_C_Spine 的 Rotation Y。
+
+当：
+
+Avatar = None
+
+后，同一条 Transform 动画正常工作。
+
+因此当前测试至少证明：
+
+VRM Skeleton
+→ Direct Bone Transform Animation
+→ 可以工作
+
+但必须明确当前动画到底走：
+
+A. Unity Humanoid / Avatar / Retargeting
+
+还是：
+
+B. 直接骨骼 Transform / Generic 风格动画
+
+不能默认把两种方式混在一起。
+
+============================================================
+16. 为什么这个 Debug 很重要
+============================================================
+
+它和表情问题形成了一个非常有意思的对应：
+
+【表情】
+
+错误做法：
+直接写 BlendShape
+
+但当前 VRM 有自己的 Runtime Expression 管理层。
+
+结果：
+值被覆盖。
+
+正确：
+通过 VRM Runtime Expression API。
+
+【动作】
+
+测试做法：
+直接写具体骨骼 Transform Animation。
+
+但 Animator 同时挂着 Humanoid Avatar。
+
+结果：
+动画被 Humanoid 姿态体系处理后，没有按预期直接作用到目标 Transform。
+
+验证：
+Avatar=None 后直接骨骼动画正常。
+
+共同经验：
+
+看到“Inspector/曲线明明有值，但模型不按它动”，
+不能只盯着那个值。
+
+要继续问：
+
+“这个模型上还有谁拥有最终写入权？”
+
+============================================================
+17. 当前 Action 架构状态
+============================================================
+
+已建立：
+
+JessActionController
+        ↓
+IJessActionDriver
+        ↓
+JessAnimatorActionDriver
+        ↓
+Animator
+        ↓
+Animation State / Clip
+        ↓
+Skeleton
+
+当前 Animator Driver 使用：
+
+animator.CrossFade(actionName, 0.2f);
+
+因此当前最简单约定是：
+
+语义 actionName
+=
+Animator State Name
+
+但这只是 V0 baseline。
+
+正式动作资产到来后可以再增加映射层。
+
+当前 Brain 仍未正式接到 ActionController。
+
+这是故意的：
+先证明底层 Animator → 骨骼可靠，
+再让 Brain 控制它。
+
+============================================================
+18. 下一步
+============================================================
+
+当前稳定状态：
+
+Animator Controller = JESS_Animator
+Animator Avatar = None
+testaction = Default State
+testaction 能稳定驱动 Spine Rotation
+
+下一步应当：
+
+1. 恢复 idle 为默认状态；
+2. 保留 testaction State；
+3. 用 JessAnimatorActionDriver 主动调用：
+   PlayAction("testaction")
+4. 验证：
+   JessActionController
+   → Driver
+   → Animator
+   → testaction
+5. 最后才接 Brain.action。
+
+============================================================
+19. 最重要的 Debug Checklist
+============================================================
+
+以后遇到“动画/表情曲线有值但模型不动”，按以下顺序检查：
+
+表情：
+1. BlendShape 本身手动能不能动？
+2. 当前模型有没有 VRM / 其他 Expression Manager？
+3. 是否有 Late Update 在覆盖？
+4. 是否应该调用模型自己的 Expression API？
+
+动作：
+1. 骨骼 Transform 手动能不能动？
+2. Clip 是否真的有 Curves？
+3. Animator 是否真的进入目标 State？
+4. Play 时目标骨骼实际 Transform 是多少？
+5. Vrm10Instance 是否覆盖？
+6. Animator Avatar 是 Humanoid 还是 None？
+7. 当前 Clip 是 Humanoid 动画还是直接 Transform 曲线？
+8. 是否把两种动画体系混用了？
+
+本轮最关键的一句：
+
+“模型能不能动”和“当前动画系统允不允许你用这种方式动它”，是两个不同的问题。

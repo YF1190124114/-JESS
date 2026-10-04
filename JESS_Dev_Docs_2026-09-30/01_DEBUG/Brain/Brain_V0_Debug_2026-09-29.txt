@@ -1,0 +1,249 @@
+JESS Brain V0 Debug Log 日期：2026-09-29 阶段：JESS「大脑」接入 / LLM
+API / 结构化输出 当前状态：Brain V0 核心接口已跑通
+
+================================================== 一、阶段目标
+==================================================
+
+本阶段目标不是训练完整的 JESS
+人格，也不是让模型直接控制身体，而是先跑通最小 Brain 链路：
+
+Unity → JessBrain → LLMClient → 阿里云百炼 / Qwen → 返回结果到 Unity
+
+在普通文本回复成功后，再升级为：
+
+用户文字 → Brain → JSON ├─ reply ├─ expression └─ action → Unity 解析
+
+这样后续可以分别把 reply 交给 TTS，把 expression/action 交给 JESS
+的表情与身体执行层。
+
+================================================== 二、当前脚本结构
+==================================================
+
+Assets/scripts/brain/ ├─ LLMClient.cs └─ JessBrain.cs
+
+LLMClient.cs： 负责 API 通信，不负责 JESS 的角色人格。
+
+JessBrain.cs： 负责 JESS 的 Prompt、输入内容以及解析 Brain 输出。
+
+设计原则： Character Brain 与具体 LLM Provider 尽量解耦。
+目前使用阿里云百炼 / Qwen，后续如更换模型，优先只修改 LLMClient / API
+配置，而不破坏上层 Brain 接口。
+
+================================================== 三、API
+配置与首次连通 ==================================================
+
+Provider： 阿里云百炼（DashScope / OpenAI-compatible API）
+
+区域： 华北2（北京）
+
+Model： qwen-plus
+
+API Key： 已配置在本地 Unity Inspector。 【不在 Debug Log 中记录真实
+Key】
+
+注意： 此前截图中曾暴露 API Key / NLS
+凭据。应轮换暴露过的凭据，后续截图需遮挡敏感信息。
+
+首次测试 Prompt： “你叫JESS。请用简短、自然的中文回答用户。”
+
+测试输入： “你好，你是谁？”
+
+成功返回类似：
+“Hi，我是Jace，一个喜欢聊天也爱听故事的朋友。有什么想聊的随时告诉我。”
+
+结论： Unity → LLMClient → 百炼/Qwen → Unity 的 API 通路成功。
+
+==================================================
+四、调试过程中出现的问题
+==================================================
+
+【问题 1】JessBrain 无法调用 LLMClient / NullReference
+
+现象： JessBrain Inspector 中： Llm Client = None (LLM Client)
+
+原因： JessBrain 的 llmClient 引用没有绑定。
+
+解决： 将 Hierarchy 中的 JESS_System 拖入： Jess Brain → Llm Client
+
+成功后显示： JESS_System (LLM Client)
+
+  ---------------------------------
+  【问题 2】Play 后没有 Brain Log
+  ---------------------------------
+
+当时现象： MicrophoneRecorder 正常运行并打印日志， 但 JessBrain
+没有出现预期日志。
+
+之后观察到： LLMClient / JessBrain 组件在重新编译后从 JESS_System
+Inspector 中消失。
+
+排查方向： 先检查 Unity Console 编译状态，而不是继续怀疑 API。
+
+  -----------------------
+  【问题 3】出现 CS1003
+  -----------------------
+
+Console 出现：
+
+Assets/scripts/brain/JessBrain.cs(9,15): error CS1003: Syntax error, ‘,’
+expected
+
+后续确认： 这条错误是调试时为了人为触发 Unity
+重新编译，修改脚本时意外产生的，并不是最初问题的可靠根因。
+
+处理： 撤销该临时修改并保存，让 Unity 重新编译。
+
+结果： CS1003 消失。 LLMClient 与 JessBrain 均能稳定挂在 JESS_System
+上。 Console 成功出现 JessBrain Awake/Start 测试信息。
+
+结论： Unity 脚本加载与组件挂载恢复正常。
+
+  ------------------------------
+  【问题 4】VS Code NuGet 警告
+  ------------------------------
+
+VS Code 曾反复提示： “未能还原解决方案的 NuGet 包” 以及加载 JessBrain.cs
+/ LLMClient.cs / MicrophoneRecorder.cs 时出现问题。
+
+当前判断： 该问题与 Unity 内部脚本是否能够编译需要分开判断。
+
+本次真正有效的判断依据是： Unity Console 是否存在 C#
+编译错误，以及组件是否能被 Unity 正确加载。
+
+目前 Brain 已经能够正常编译并运行，因此 NuGet 警告暂不阻塞 Brain V0。
+
+================================================== 五、Brain 结构化输出
+==================================================
+
+普通文本 API 调用成功后，将 Brain 输出升级为 JSON。
+
+目标格式：
+
+{ “reply”: “JESS要说的话”, “expression”: “表情”, “action”: “动作” }
+
+当前 expression 白名单：
+
+neutral angry fun happy sad surprised
+
+这些语义标签后续计划映射到 VRoid / UniVRM 中已有的完整脸部 BlendShape：
+
+neutral → Fcl_ALL_Neutral angry → Fcl_ALL_Angry fun → Fcl_ALL_Fun happy
+→ Fcl_ALL_Joy sad → Fcl_ALL_Sorrow surprised → Fcl_ALL_Surprised
+
+当前 action 暂时只允许：
+
+idle
+
+原因： 身体动作执行层尚未建立。 Brain 不应该生成 Unity
+中不存在的动作名称。
+
+==================================================
+六、结构化输出实际测试
+==================================================
+
+测试输入：
+
+“我今天真的累死了，什么都不想干。”
+
+Qwen 成功返回结构化内容。
+
+Unity 成功解析为：
+
+reply = “抱抱，快去躺平，我给你放点轻音乐”
+
+expression = happy
+
+action = idle
+
+结论：
+
+LLM → JSON → Unity JsonUtility → BrainResult
+
+链路成功。
+
+当前已经验证：
+
+reply ✅ expression ✅ action ✅
+
+================================================== 七、当前 BrainResult
+数据结构 ==================================================
+
+JessBrain 中使用：
+
+[Serializable] public class BrainResult { public string reply; public
+string expression; public string action; }
+
+Unity 已能将模型返回的 JSON 拆分成以上三个字段。
+
+================================================== 八、当前阶段结论
+==================================================
+
+Brain V0 最小接口已经跑通。
+
+当前完整状态：
+
+文字输入 ↓ JessBrain ↓ LLMClient ↓ Qwen ↓ JSON ↓ Unity 解析 ├─ reply ✅
+├─ expression ✅ └─ action ✅
+
+因此 Brain 已经具备向后续模块发出统一指令的基础能力。
+
+==================================================
+九、已知但暂不处理的问题：JESS 人格
+==================================================
+
+当前模型输出：
+
+“抱抱，快去躺平，我给你放点轻音乐。”
+
+技术上完全正确，但角色人格明显不符合目前设想中的 JESS。
+
+原因： 当前 system prompt 只提供了极弱的人格描述，例如：
+“你叫JESS，是一个自然、有个性的数字人。”
+
+因此 Qwen 会倾向生成通用、友善、陪伴型 AI 的表达方式。
+
+这不是 Brain 接口故障，而是 Character Prompt / Character Brain
+尚未设计。
+
+后续人格层需要单独处理，例如： - JESS 的语言风格 - mean / 嘴硬程度 -
+情绪表达方式 - 关心用户时是否直接表达 - 表面语言与真实情绪之间的反差 -
+什么情况下会出现罕见的温柔 - 长期关系与记忆如何改变表达
+
+重要观察： 如果 JESS 平时较
+mean、克制、嘴硬，那么偶尔出现真正温柔的表达可能具有更强的关系意义。
+这种“反差”不应成为默认输出，否则会失去角色张力。
+
+但以上属于后续 Character Brain / Character Spec 工作，不影响当前 Brain
+V0 工程接口。
+
+================================================== 十、下一步
+==================================================
+
+Brain V0 暂时封口。
+
+下一阶段建议单独进入： JESS 表情 / Body 执行层。
+
+第一目标：
+
+Brain 输出： expression = happy
+
+↓ Body 接收语义标签
+
+↓ 映射： happy → Fcl_ALL_Joy
+
+↓ JESS 在 Unity 中真正做出笑脸
+
+随后依次验证六种表情。
+
+身体动作 action 暂时保持 idle， 待 Animator / 动作资源整理后再扩展
+action 白名单。
+
+================================================== 当前里程碑
+==================================================
+
+ASR / 耳朵： 已能完成 microphone → ASR → userText（此前阶段）
+
+Brain / 大脑： API 通路 ✅ Qwen 返回 ✅ JSON 结构化输出 ✅ Unity JSON
+解析 ✅ reply 字段 ✅ expression 字段 ✅ action 字段 ✅
+
+下一模块： Expression / Body 执行层

@@ -1,0 +1,30 @@
+JESS DEV DOCS — INDEX
+最近核对：2026-10-05
+
+00_README/
+  README_文档怎么维护.txt
+
+01_DEBUG/
+  ASR_macOS/
+    macOS_Microphone_Debug_2026-09-30.md
+  Brain/
+    Brain_V0_Debug_2026-09-29.txt
+  Body/
+    VRM_Expression_Animator_Debug_2026-09-30.txt
+    GLB_FBX_Animation_Export_Debug_2026-10-01.txt
+
+02_ARCHITECTURE/
+  JESS_V0_Architecture_Overview.txt
+  Model_Replaceable_Architecture_2026-09-30.txt
+
+03_RUNBOOK/
+  Model_Replacement/
+    模型替换与Blender接入_Runbook.txt
+  macOS_Build_Microphone/
+    macOS麦克风与Build_Runbook.txt
+
+04_CURRENT_STATE/
+  CURRENT_STATE_2026-10-05.txt
+
+99_ARCHIVE/
+  原始上传日志（完整保留）

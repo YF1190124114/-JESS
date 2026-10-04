@@ -1,0 +1,408 @@
+JESS Debug / Architecture Log 01
+标题：把 Brain、Body 与模型拆成干净接口——让 Blender 表情与动作可以持续替换接入
+日期：2026-09-30
+项目：JESS 数字人
+环境：Unity 2022.3.62f2c1 / 当前测试模型为 VRM 1.0
+
+2026-10-05 核对说明：
+本文保留 2026-09-30 的设计动机与接口推导。
+涉及“当前 Scene / 当前 Driver / 尚未接入”的状态描述，
+以本文第 11 节的最新状态为准。
+
+============================================================
+1. 为什么要拆这一层
+============================================================
+
+JESS 后续不会一直使用当前 VRoid/VRM 模型。
+
+当前阶段：
+- Jess 是 VRM 1.0 模型；
+- 表情由 UniVRM Runtime Expression 控制；
+- 动作暂时通过 Animator 测试。
+
+后续阶段：
+- 队友会在 Blender 中继续捏正式模型；
+- 表情可能变成 Blender Shape Keys；
+- 动作会在 Blender 中制作 Action / Animation Clip；
+- 最终模型很可能以 GLB 等形式进入 Unity。
+
+如果 Brain 直接知道：
+“Fcl_ALL_Joy”“J_Bip_C_Spine”“某个 Blender Shape Key 名”“某个具体 Animator State 名”，
+那么每换一次模型，Brain、Unity 脚本和场景引用都会一起崩。
+
+所以这次重构的目标不是“让当前 VRM 能动”这么简单，而是建立一个稳定边界：
+
+Brain 只说 JESS 的语义。
+Controller 负责 JESS 的行为逻辑。
+Driver / Adapter 负责把语义翻译成当前模型真正能执行的东西。
+
+============================================================
+2. 最终采用的结构
+============================================================
+
+Hierarchy 逻辑上拆成两块：
+
+SampleScene
+├── JESS_Character
+│   └── Jess / Future_Model
+│       ├── 模型骨骼
+│       ├── Mesh
+│       ├── Animator
+│       └── 当前模型专属组件
+│
+└── JESS_System
+    ├── MicrophoneRecorder
+    ├── LLMClient
+    ├── JessBrain
+    ├── JessExpressionController
+    ├── Expression Driver
+    ├── JessActionController
+    └── Action Driver
+
+核心原则：
+
+JESS_Character = 可替换的“身体插槽”
+JESS_System    = 尽量永久保留的“系统层”
+
+换模型时，优先只换 JESS_Character 下面的孩子，不重写 Brain。
+
+2026-10-05 当前实现变化：
+SampleScene 已按信息流重组为 JessPerception / JessBrain / JessOutput。
+旧的 JESS_System / JESS_Character 根节点不再是当前 Scene 实际结构。
+模型实例目前分别挂在 Output/Body 的 Expression / Action 相关节点下。
+“角色与系统解耦”的原则仍有效，但不要把旧 Hierarchy 名称当作现状。
+
+============================================================
+3. 表情接口
+============================================================
+
+Brain 输出的不是 BlendShape 名，而是语义，例如：
+
+neutral
+happy
+sad
+angry
+surprised
+fun
+
+接口：
+
+public interface IJessExpressionDriver
+{
+    void SetExpression(string expressionName, float weight);
+    void ClearExpressions();
+}
+
+JessExpressionController 不需要知道当前是 VRM、GLB 还是其他模型。
+
+它只负责：
+- 收到语义表情；
+- 控制旧表情淡出；
+- 控制新表情淡入；
+- 控制 transitionDuration；
+- 最后把目标表情稳定在 1.0。
+
+VRM 路径使用：
+
+JessVRMExpressionDriver
+    ↓
+UniVRM10 Runtime.Expression
+    ↓
+当前 VRM 表情系统
+
+例如：
+happy → ExpressionKey.Happy
+sad → ExpressionKey.Sad
+fun → ExpressionKey.Relaxed
+
+Blender / GLB 路径使用：
+
+JessBlendShapeExpressionDriver
+    ↓
+Expression Mapping
+    ↓
+一个或多个 Shape Keys
+
+截至 2026-10-05，Controller 已在 SampleScene 中切换到
+JessBlendShapeExpressionDriver；JessVRMExpressionDriver 仍保留作为兼容路径。
+
+也就是说 Controller 不换，只切换 Driver 和映射。
+
+============================================================
+4. 为什么一个 JESS 表情不能等于一个 Shape Key
+============================================================
+
+正式角色的“happy”很可能不是一个滑块。
+
+例如：
+
+happy
+├── mouth_smile      0.8
+├── eye_happy        0.5
+└── brow_soft        0.2
+
+所以未来 Blender 表情接入使用 Mapping：
+
+JESS 表情名
+→ Mesh
+→ Shape Key
+→ 最终权重
+
+同一个 semantic expression 可以对应多个 Shape Key。
+
+Brain 永远只输出：
+
+"expression": "happy"
+
+它不需要知道 Face Mesh 叫什么，也不需要知道 Blender Shape Key 叫什么。
+
+============================================================
+5. Blender 表情交付接口
+============================================================
+
+约定队友交付：
+
+JESS_模型交付/
+├── JESS.blend
+├── JESS.glb
+└── JESS_表情映射表.xlsx
+
+其中：
+
+JESS.blend
+- Blender 源文件；
+- 保留以后继续修改的能力。
+
+JESS.glb
+- Unity 实际接入模型；
+- 模型、骨骼、Shape Keys 正确导出。
+
+JESS_表情映射表.xlsx
+建议字段：
+
+JESS 表情名 | Mesh/对象名 | Shape Key 名 | 最终权重 | 备注
+
+例如：
+
+happy | Face | mouth_smile | 0.8 | 嘴角上扬
+happy | Face | eye_happy   | 0.5 | 笑眼
+sad   | Face | mouth_sad   | 0.7 | 嘴部
+sad   | Face | brow_sad    | 0.8 | 眉毛
+shy   | Face | cheek_shy   | 1.0 | 脸红
+shy   | Face | eye_happy   | 0.3 | 微眯眼
+
+第一批至少保证：
+neutral / happy / sad / angry / surprised / fun
+
+这样队友负责“捏”，Unity 负责“映射”，Brain 不动。
+
+============================================================
+6. 动作接口
+============================================================
+
+动作采用同样思路。
+
+接口：
+
+public interface IJessActionDriver
+{
+    void PlayAction(string actionName);
+    void StopAction();
+}
+
+JessActionController 只认识 JESS 语义动作。
+
+当前最小 Driver：
+
+JessAnimatorActionDriver
+    ↓
+Animator.CrossFade(actionName, 0.2f)
+    ↓
+Animator State
+    ↓
+Animation Clip
+    ↓
+骨骼
+
+当前 Brain 的 action whitelist 暂时只有：
+idle
+
+这是故意的。
+
+在正式动作资产还没有确定之前，不提前假设最终一定有 wave、nod 等动作。
+等 Blender 动作真正做出来以后，再确定 JESS 的语义动作词表。
+
+============================================================
+7. Blender 动作未来如何接入
+============================================================
+
+未来队友在 Blender 中制作动作后，Unity 侧需要的不是让 Brain 学骨骼，而是建立类似表情的动作映射。
+
+逻辑：
+
+JESS semantic action
+        ↓
+JessActionController
+        ↓
+IJessActionDriver
+        ↓
+当前模型的 Animator / Animation Clip
+        ↓
+Blender 导出的骨骼动画
+
+未来可根据真实资产建立动作交付表，例如记录：
+
+JESS 动作语义名
+Blender Action / Unity Clip 名
+是否循环
+备注
+
+具体动作名等资产真正出现后再定。
+
+============================================================
+8. 当前脚本层的职责边界
+============================================================
+
+BrainResult：
+
+reply
+expression
+action
+
+Brain：
+- 理解用户；
+- 输出语义；
+- 不碰骨骼；
+- 不碰 Shape Key；
+- 不碰 VRM API。
+
+JessExpressionController：
+- 管表情状态与过渡；
+- 不关心模型格式。
+
+IJessExpressionDriver：
+- 模型表情适配接口。
+
+JessVRMExpressionDriver：
+- VRM 专用，当前仍保留但不再是 Controller 选中的 Driver。
+
+JessBlendShapeExpressionDriver：
+- 当前 Blender / GLB Shape Key / BlendShape 模型 Driver。
+
+JessActionController：
+- 管语义动作请求；
+- 不关心骨骼名称。
+
+IJessActionDriver：
+- 模型动作适配接口。
+
+JessAnimatorActionDriver：
+- 把语义动作送入 Animator。
+
+============================================================
+9. 换正式 Blender 模型时的目标流程
+============================================================
+
+理想流程：
+
+Step 1
+队友在 Blender 完成模型、Shape Keys、动作。
+
+Step 2
+队友导出 JESS.glb，并填写映射表。
+
+Step 3
+Unity 中把新模型放进：
+
+JESS_Character
+└── New_Jess
+
+Step 4
+根据实际模型配置新的 Expression Driver。
+
+Step 5
+把 JessExpressionController 的
+Expression Driver Component
+指向新的 Driver。
+
+Step 6
+导入动作 Clip，配置 Animator / Action Driver。
+
+Step 7
+Brain 保持原来的：
+
+expression = happy / sad / ...
+action = 某个 JESS 语义动作
+
+Step 8
+测试：
+Brain → Controller → Driver → 新模型。
+
+============================================================
+10. 这次重构真正解决的问题
+============================================================
+
+以前潜在结构：
+
+Brain
+→ VRM API
+→ Fcl_ALL_Joy
+→ 某个具体骨骼
+→ 当前 Jess
+
+模型一换，整条链重写。
+
+现在：
+
+Brain
+→ JESS semantic expression/action
+→ Controller
+→ Interface
+→ Model Driver
+→ Current Model
+
+因此“JESS 是谁”与“当前模型怎么实现 JESS”被拆开。
+
+这也是后续多人协作最重要的边界：
+
+Blender 同学可以继续改模型。
+Unity 集成可以继续换 Driver。
+Brain 可以继续改人格和决策。
+
+三者不应该因为一个 Shape Key 改名就一起修改。
+
+============================================================
+11. 当前状态（2026-10-05 核对）
+============================================================
+
+已完成并由当前代码 / Scene 核实：
+- Perception → Brain → Output 脚本目录重构；
+- JessPerception / JessBrain / JessOutput Hierarchy 重构；
+- IJessExpressionDriver；
+- JessExpressionController；
+- JessVRMExpressionDriver 保留；
+- JessBlendShapeExpressionDriver 已挂入 SampleScene；
+- JessExpressionController 已切换到 BlendShape Driver；
+- Blender / GLB Mesh 的 Shape Key Mapping 已实际配置；
+- neutral → Fcl_ALL_Neutral；
+- happy → Fcl_ALL_Joy；
+- fake_smile → 假笑；
+- fake_smile 已用临时强制 expression 做过运行验证；
+- 临时强制代码已经删除，当前 scripts 无残留；
+- IJessActionDriver；
+- JessActionController；
+- JessAnimatorActionDriver；
+- Brain → ActionController 接线已存在；
+- JessBrain → JessSpeechController → AliyunTtsDriver 接线已存在。
+
+当前边界与未完成项：
+- fake_smile 尚未加入 JessBrain expression 白名单；
+- 当前正常 Brain 流程不会自动选择 fake_smile；
+- 当前完整 Blender 表情集合尚未完成；
+- 正式动作资产与正式动作语义词表尚未完成；
+- 当前 Scene 同时保留 VRM 与 GLB 相关对象 / Driver，不能删除 fallback 资产；
+- 模型当前挂载位置属于现阶段集成结构，后续如重新建立统一 Character Slot，
+  应通过独立 PR 调整并重新验证所有序列化引用。
+
+原则：
+先让资产真实出现，再定义映射；不提前把模型细节写死进 Brain。
