@@ -1,0 +1,815 @@
+ D Assets/Jess.vrm
+ D Assets/Jess.vrm.meta
+ M Assets/Scenes/SampleScene.unity
+ D Assets/cleanjess.fbx
+ D Assets/cleanjess.fbx.meta
+ D Assets/jess.fbx
+ D Assets/jess.fbx.meta
+ D Assets/jesss.glb
+ D Assets/jesss.glb.meta
+ M Assets/scripts/brain/JessBrain.cs
+ M Assets/scripts/output/body/expression/JessBlendShapeExpressionDriver.cs
+ M Assets/scripts/output/body/expression/JessExpressionController.cs
+?? Assets/Models.meta
+?? Assets/Models/
+?? Assets/scripts/JessExpressionDemo.cs
+?? Assets/scripts/JessExpressionDemo.cs.meta
+?? jess_git_check.txt
+4bf7cda docs: add and update JESS development documentation
+0903302 Merge pull request #3 from YF1190124114/feature/blender-expression
+26f02c0 configure Blender expression mappings
+d3a903a Merge pull request #2 from YF1190124114/refactor/module-architecture
+a6f6979 refactor: organize JESS into perception brain and output modules
+40d16bf Merge pull request #1 from YF1190124114/refactor/speech-architecture
+4131ecf refactor: route speech through JessSpeechController
+7b82561 JESS v0.1 baseline: core pipeline verified
+ Assets/Jess.vrm                                    | Bin 15981768 -> 0 bytes
+ Assets/Jess.vrm.meta                               |  12 --
+ Assets/Scenes/SampleScene.unity                    | 201 ++++++++++++++++++++-
+ Assets/cleanjess.fbx                               | Bin 2336108 -> 0 bytes
+ Assets/cleanjess.fbx.meta                          | 109 -----------
+ Assets/jess.fbx                                    | Bin 3999916 -> 0 bytes
+ Assets/jess.fbx.meta                               | 109 -----------
+ Assets/jesss.glb                                   | Bin 10364196 -> 0 bytes
+ Assets/jesss.glb.meta                              |  12 --
+ Assets/scripts/brain/JessBrain.cs                  |  26 ++-
+ .../expression/JessBlendShapeExpressionDriver.cs   |  72 +++++++-
+ .../body/expression/JessExpressionController.cs    |   5 +-
+ 12 files changed, 283 insertions(+), 263 deletions(-)
+diff --git a/Assets/Jess.vrm b/Assets/Jess.vrm
+deleted file mode 100644
+index f6cb51d..0000000
+Binary files a/Assets/Jess.vrm and /dev/null differ
+diff --git a/Assets/Jess.vrm.meta b/Assets/Jess.vrm.meta
+deleted file mode 100644
+index c56c87c..0000000
+--- a/Assets/Jess.vrm.meta
++++ /dev/null
+@@ -1,12 +0,0 @@
+-fileFormatVersion: 2
+-guid: e9d473ab5bff241e7aa500dffe5cbc97
+-ScriptedImporter:
+-  internalIDToNameTable: []
+-  externalObjects: {}
+-  serializedVersion: 2
+-  userData: 
+-  assetBundleName: 
+-  assetBundleVariant: 
+-  script: {fileID: 11500000, guid: f66ead3390398f443aa127b741826ad9, type: 3}
+-  MigrateToVrm1: 1
+-  RenderPipeline: 0
+diff --git a/Assets/Scenes/SampleScene.unity b/Assets/Scenes/SampleScene.unity
+index c9fa5c2..a008ae1 100644
+--- a/Assets/Scenes/SampleScene.unity
++++ b/Assets/Scenes/SampleScene.unity
+@@ -122,6 +122,143 @@ NavMeshSettings:
+     debug:
+       m_Flags: 0
+   m_NavMeshData: {fileID: 0}
++--- !u!1001 &44038264
++PrefabInstance:
++  m_ObjectHideFlags: 0
++  serializedVersion: 2
++  m_Modification:
++    serializedVersion: 3
++    m_TransformParent: {fileID: 0}
++    m_Modifications:
++    - target: {fileID: -9202605092671148497, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_Name
++      value: Jess_Unity
++      objectReference: {fileID: 0}
++    - target: {fileID: -3067465322312812312, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_DirtyAABB
++      value: 0
++      objectReference: {fileID: 0}
++    - target: {fileID: -3067465322312812312, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_AABB.m_Center.y
++      value: 0.83200324
++      objectReference: {fileID: 0}
++    - target: {fileID: -3067465322312812312, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_AABB.m_Center.z
++      value: -0.013626218
++      objectReference: {fileID: 0}
++    - target: {fileID: -3067465322312812312, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_AABB.m_Extent.x
++      value: 0.64342433
++      objectReference: {fileID: 0}
++    - target: {fileID: -3067465322312812312, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_AABB.m_Extent.y
++      value: 0.8367846
++      objectReference: {fileID: 0}
++    - target: {fileID: -3067465322312812312, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_AABB.m_Extent.z
++      value: 0.18040228
++      objectReference: {fileID: 0}
++    - target: {fileID: 1507701872522829344, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_DirtyAABB
++      value: 0
++      objectReference: {fileID: 0}
++    - target: {fileID: 1507701872522829344, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_AABB.m_Center.x
++      value: -0.010601185
++      objectReference: {fileID: 0}
++    - target: {fileID: 1507701872522829344, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_AABB.m_Center.y
++      value: 1.3359919
++      objectReference: {fileID: 0}
++    - target: {fileID: 1507701872522829344, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_AABB.m_Center.z
++      value: 0.03935086
++      objectReference: {fileID: 0}
++    - target: {fileID: 1507701872522829344, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_AABB.m_Extent.x
++      value: 0.18629053
++      objectReference: {fileID: 0}
++    - target: {fileID: 1507701872522829344, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_AABB.m_Extent.y
++      value: 0.34975225
++      objectReference: {fileID: 0}
++    - target: {fileID: 1507701872522829344, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_AABB.m_Extent.z
++      value: 0.17984578
++      objectReference: {fileID: 0}
++    - target: {fileID: 4467138112451190354, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_LocalPosition.x
++      value: 29.243
++      objectReference: {fileID: 0}
++    - target: {fileID: 4467138112451190354, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_LocalPosition.y
++      value: 2.615
++      objectReference: {fileID: 0}
++    - target: {fileID: 4467138112451190354, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_LocalPosition.z
++      value: 21.359
++      objectReference: {fileID: 0}
++    - target: {fileID: 4467138112451190354, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_LocalRotation.w
++      value: 0.46481276
++      objectReference: {fileID: 0}
++    - target: {fileID: 4467138112451190354, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_LocalRotation.x
++      value: -0
++      objectReference: {fileID: 0}
++    - target: {fileID: 4467138112451190354, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_LocalRotation.y
++      value: -0.88540906
++      objectReference: {fileID: 0}
++    - target: {fileID: 4467138112451190354, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_LocalRotation.z
++      value: -0
++      objectReference: {fileID: 0}
++    - target: {fileID: 4467138112451190354, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_LocalEulerAnglesHint.x
++      value: 0
++      objectReference: {fileID: 0}
++    - target: {fileID: 4467138112451190354, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_LocalEulerAnglesHint.y
++      value: -124.604
++      objectReference: {fileID: 0}
++    - target: {fileID: 4467138112451190354, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_LocalEulerAnglesHint.z
++      value: 0
++      objectReference: {fileID: 0}
++    - target: {fileID: 6456831026421203788, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_DirtyAABB
++      value: 0
++      objectReference: {fileID: 0}
++    - target: {fileID: 6456831026421203788, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_AABB.m_Center.x
++      value: 0.000000029802322
++      objectReference: {fileID: 0}
++    - target: {fileID: 6456831026421203788, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_AABB.m_Center.y
++      value: 1.5386629
++      objectReference: {fileID: 0}
++    - target: {fileID: 6456831026421203788, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_AABB.m_Center.z
++      value: -0.014825292
++      objectReference: {fileID: 0}
++    - target: {fileID: 6456831026421203788, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_AABB.m_Extent.x
++      value: 0.1022699
++      objectReference: {fileID: 0}
++    - target: {fileID: 6456831026421203788, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_AABB.m_Extent.y
++      value: 0.117277145
++      objectReference: {fileID: 0}
++    - target: {fileID: 6456831026421203788, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++      propertyPath: m_AABB.m_Extent.z
++      value: 0.07558259
++      objectReference: {fileID: 0}
++    m_RemovedComponents: []
++    m_RemovedGameObjects: []
++    m_AddedGameObjects: []
++    m_AddedComponents: []
++  m_SourcePrefab: {fileID: 7446590082972375451, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
+ --- !u!1 &126739184
+ GameObject:
+   m_ObjectHideFlags: 0
+@@ -297,7 +434,7 @@ GameObject:
+   m_Icon: {fileID: 0}
+   m_NavMeshLayer: 0
+   m_StaticEditorFlags: 0
+-  m_IsActive: 1
++  m_IsActive: 0
+ --- !u!114 &280604523
+ MonoBehaviour:
+   m_ObjectHideFlags: 0
+@@ -623,7 +760,7 @@ Camera:
+     height: 1
+   near clip plane: 0.01
+   far clip plane: 1000
+-  field of view: 60
++  field of view: 35
+   orthographic: 0
+   orthographic size: 5
+   m_Depth: -1
+@@ -649,13 +786,13 @@ Transform:
+   m_PrefabAsset: {fileID: 0}
+   m_GameObject: {fileID: 963194225}
+   serializedVersion: 2
+-  m_LocalRotation: {x: -0.057108115, y: 0.9231784, z: -0.15117039, w: -0.3487519}
+-  m_LocalPosition: {x: 30.142809, y: 4.186987, z: 21.570778}
++  m_LocalRotation: {x: 0.09363189, y: -0.8350149, z: 0.10226986, w: 0.53246987}
++  m_LocalPosition: {x: 29.9768, y: 4.3022, z: 21.7297}
+   m_LocalScale: {x: 1, y: 1, z: 1}
+   m_ConstrainProportionsScale: 0
+   m_Children: []
+   m_Father: {fileID: 0}
+-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
++  m_LocalEulerAnglesHint: {x: 15.694, y: -115.34, z: -2.826}
+ --- !u!1001 &1009500099
+ PrefabInstance:
+   m_ObjectHideFlags: 0
+@@ -698,7 +835,7 @@ PrefabInstance:
+       objectReference: {fileID: 0}
+     - target: {fileID: -1728013695380148634, guid: e9d473ab5bff241e7aa500dffe5cbc97, type: 3}
+       propertyPath: m_IsActive
+-      value: 1
++      value: 0
+       objectReference: {fileID: 0}
+     - target: {fileID: 2953604236389334553, guid: e9d473ab5bff241e7aa500dffe5cbc97, type: 3}
+       propertyPath: m_DirtyAABB
+@@ -877,6 +1014,7 @@ GameObject:
+   - component: {fileID: 1255658407}
+   - component: {fileID: 1255658406}
+   - component: {fileID: 1255658408}
++  - component: {fileID: 1255658409}
+   m_Layer: 0
+   m_Name: Expression
+   m_TagString: Untagged
+@@ -942,7 +1080,7 @@ MonoBehaviour:
+   expressions:
+   - expressionName: neutral
+     targets:
+-    - mesh: {fileID: 526277256}
++    - mesh: {fileID: 1684927122}
+       blendShapeName: Fcl_ALL_Neutral
+       targetWeight: 1
+   - expressionName: happy
+@@ -955,6 +1093,47 @@ MonoBehaviour:
+     - mesh: {fileID: 526277256}
+       blendShapeName: "\u5047\u7B11"
+       targetWeight: 1
++  - expressionName: nailong
++    targets:
++    - mesh: {fileID: 1684927122}
++      blendShapeName: Fcl_ALL_nailong
++      targetWeight: 1
++  - expressionName: tiaomei
++    targets:
++    - mesh: {fileID: 1684927122}
++      blendShapeName: Fcl_ALL_tiaomei
++      targetWeight: 1
++  - expressionName: buxie
++    targets:
++    - mesh: {fileID: 1684927122}
++      blendShapeName: Fcl_ALL_buxie
++      targetWeight: 1
++  - expressionName: jiaxiao
++    targets:
++    - mesh: {fileID: 1684927122}
++      blendShapeName: Fcl_ALL_jiaxiao
++      targetWeight: 1
++  - expressionName: jiaxiao
++    targets:
++    - mesh: {fileID: 1684927122}
++      blendShapeName: Fcl_ALL_buxie
++      targetWeight: 1
++--- !u!114 &1255658409
++MonoBehaviour:
++  m_ObjectHideFlags: 0
++  m_CorrespondingSourceObject: {fileID: 0}
++  m_PrefabInstance: {fileID: 0}
++  m_PrefabAsset: {fileID: 0}
++  m_GameObject: {fileID: 1255658404}
++  m_Enabled: 1
++  m_EditorHideFlags: 0
++  m_Script: {fileID: 11500000, guid: bcfa01eb386644c94a93b86513e8c476, type: 3}
++  m_Name: 
++  m_EditorClassIdentifier: 
++  expressionController: {fileID: 1255658407}
++  speechController: {fileID: 126739188}
++  startDelay: 1
++  lineGap: 2.5
+ --- !u!1 &1576733159 stripped
+ GameObject:
+   m_CorrespondingSourceObject: {fileID: -9202605092671148497, guid: fb3664044385e4515a51bd8eae77e2e2, type: 3}
+@@ -1051,6 +1230,11 @@ Transform:
+   - {fileID: 1717356039}
+   m_Father: {fileID: 0}
+   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
++--- !u!137 &1684927122 stripped
++SkinnedMeshRenderer:
++  m_CorrespondingSourceObject: {fileID: 6456831026421203788, guid: c415e61341e034314b38b7bd2b518ffd, type: 3}
++  m_PrefabInstance: {fileID: 44038264}
++  m_PrefabAsset: {fileID: 0}
+ --- !u!1 &1717356038
+ GameObject:
+   m_ObjectHideFlags: 0
+@@ -1132,7 +1316,7 @@ PrefabInstance:
+       objectReference: {fileID: 0}
+     - target: {fileID: -9202605092671148497, guid: fb3664044385e4515a51bd8eae77e2e2, type: 3}
+       propertyPath: m_IsActive
+-      value: 1
++      value: 0
+       objectReference: {fileID: 0}
+     - target: {fileID: -2746321379136472449, guid: fb3664044385e4515a51bd8eae77e2e2, type: 3}
+       propertyPath: m_DirtyAABB
+@@ -1303,3 +1487,4 @@ SceneRoots:
+   - {fileID: 1678181419}
+   - {fileID: 280604525}
+   - {fileID: 1576797298}
++  - {fileID: 44038264}
+diff --git a/Assets/cleanjess.fbx b/Assets/cleanjess.fbx
+deleted file mode 100644
+index 1554294..0000000
+Binary files a/Assets/cleanjess.fbx and /dev/null differ
+diff --git a/Assets/cleanjess.fbx.meta b/Assets/cleanjess.fbx.meta
+deleted file mode 100644
+index 8f43c50..0000000
+--- a/Assets/cleanjess.fbx.meta
++++ /dev/null
+@@ -1,109 +0,0 @@
+-fileFormatVersion: 2
+-guid: 83eb85b2e0663418a87866a8919e7db4
+-ModelImporter:
+-  serializedVersion: 22200
+-  internalIDToNameTable: []
+-  externalObjects: {}
+-  materials:
+-    materialImportMode: 2
+-    materialName: 0
+-    materialSearch: 1
+-    materialLocation: 1
+-  animations:
+-    legacyGenerateAnimations: 4
+-    bakeSimulation: 0
+-    resampleCurves: 1
+-    optimizeGameObjects: 0
+-    removeConstantScaleCurves: 0
+-    motionNodeName: 
+-    rigImportErrors: 
+-    rigImportWarnings: 
+-    animationImportErrors: 
+-    animationImportWarnings: 
+-    animationRetargetingWarnings: 
+-    animationDoRetargetingWarnings: 0
+-    importAnimatedCustomProperties: 0
+-    importConstraints: 0
+-    animationCompression: 1
+-    animationRotationError: 0.5
+-    animationPositionError: 0.5
+-    animationScaleError: 0.5
+-    animationWrapMode: 0
+-    extraExposedTransformPaths: []
+-    extraUserProperties: []
+-    clipAnimations: []
+-    isReadable: 0
+-  meshes:
+-    lODScreenPercentages: []
+-    globalScale: 1
+-    meshCompression: 0
+-    addColliders: 0
+-    useSRGBMaterialColor: 1
+-    sortHierarchyByName: 1
+-    importPhysicalCameras: 1
+-    importVisibility: 1
+-    importBlendShapes: 1
+-    importCameras: 1
+-    importLights: 1
+-    nodeNameCollisionStrategy: 1
+-    fileIdsGeneration: 2
+-    swapUVChannels: 0
+-    generateSecondaryUV: 0
+-    useFileUnits: 1
+-    keepQuads: 0
+-    weldVertices: 1
+-    bakeAxisConversion: 0
+-    preserveHierarchy: 0
+-    skinWeightsMode: 0
+-    maxBonesPerVertex: 4
+-    minBoneWeight: 0.001
+-    optimizeBones: 1
+-    meshOptimizationFlags: -1
+-    indexFormat: 0
+-    secondaryUVAngleDistortion: 8
+-    secondaryUVAreaDistortion: 15.000001
+-    secondaryUVHardAngle: 88
+-    secondaryUVMarginMethod: 1
+-    secondaryUVMinLightmapResolution: 40
+-    secondaryUVMinObjectScale: 1
+-    secondaryUVPackMargin: 4
+-    useFileScale: 1
+-    strictVertexDataChecks: 0
+-  tangentSpace:
+-    normalSmoothAngle: 60
+-    normalImportMode: 0
+-    tangentImportMode: 3
+-    normalCalculationMode: 4
+-    legacyComputeAllNormalsFromSmoothingGroupsWhenMeshHasBlendShapes: 0
+-    blendShapeNormalImportMode: 1
+-    normalSmoothingSource: 0
+-  referencedClips: []
+-  importAnimation: 1
+-  humanDescription:
+-    serializedVersion: 3
+-    human: []
+-    skeleton: []
+-    armTwist: 0.5
+-    foreArmTwist: 0.5
+-    upperLegTwist: 0.5
+-    legTwist: 0.5
+-    armStretch: 0.05
+-    legStretch: 0.05
+-    feetSpacing: 0
+-    globalScale: 1
+-    rootMotionBoneName: 
+-    hasTranslationDoF: 0
+-    hasExtraRoot: 0
+-    skeletonHasParents: 1
+-  lastHumanDescriptionAvatarSource: {instanceID: 0}
+-  autoGenerateAvatarMappingIfUnspecified: 1
+-  animationType: 2
+-  humanoidOversampling: 1
+-  avatarSetup: 0
+-  addHumanoidExtraRootOnlyWhenUsingAvatar: 1
+-  importBlendShapeDeformPercent: 1
+-  remapMaterialsIfMaterialImportModeIsNone: 0
+-  additionalBone: 0
+-  userData: 
+-  assetBundleName: 
+-  assetBundleVariant: 
+diff --git a/Assets/jess.fbx b/Assets/jess.fbx
+deleted file mode 100644
+index 175aa95..0000000
+Binary files a/Assets/jess.fbx and /dev/null differ
+diff --git a/Assets/jess.fbx.meta b/Assets/jess.fbx.meta
+deleted file mode 100644
+index 84f6b84..0000000
+--- a/Assets/jess.fbx.meta
++++ /dev/null
+@@ -1,109 +0,0 @@
+-fileFormatVersion: 2
+-guid: e05f39709d5474febb1c262a7cea38a8
+-ModelImporter:
+-  serializedVersion: 22200
+-  internalIDToNameTable: []
+-  externalObjects: {}
+-  materials:
+-    materialImportMode: 2
+-    materialName: 0
+-    materialSearch: 1
+-    materialLocation: 1
+-  animations:
+-    legacyGenerateAnimations: 4
+-    bakeSimulation: 0
+-    resampleCurves: 0
+-    optimizeGameObjects: 0
+-    removeConstantScaleCurves: 0
+-    motionNodeName: 
+-    rigImportErrors: 
+-    rigImportWarnings: 
+-    animationImportErrors: 
+-    animationImportWarnings: 
+-    animationRetargetingWarnings: 
+-    animationDoRetargetingWarnings: 0
+-    importAnimatedCustomProperties: 0
+-    importConstraints: 0
+-    animationCompression: 1
+-    animationRotationError: 0.5
+-    animationPositionError: 0.5
+-    animationScaleError: 0.5
+-    animationWrapMode: 0
+-    extraExposedTransformPaths: []
+-    extraUserProperties: []
+-    clipAnimations: []
+-    isReadable: 0
+-  meshes:
+-    lODScreenPercentages: []
+-    globalScale: 1
+-    meshCompression: 0
+-    addColliders: 0
+-    useSRGBMaterialColor: 1
+-    sortHierarchyByName: 1
+-    importPhysicalCameras: 1
+-    importVisibility: 1
+-    importBlendShapes: 1
+-    importCameras: 1
+-    importLights: 1
+-    nodeNameCollisionStrategy: 1
+-    fileIdsGeneration: 2
+-    swapUVChannels: 0
+-    generateSecondaryUV: 0
+-    useFileUnits: 1
+-    keepQuads: 0
+-    weldVertices: 1
+-    bakeAxisConversion: 0
+-    preserveHierarchy: 0
+-    skinWeightsMode: 0
+-    maxBonesPerVertex: 4
+-    minBoneWeight: 0.001
+-    optimizeBones: 1
+-    meshOptimizationFlags: -1
+-    indexFormat: 0
+-    secondaryUVAngleDistortion: 8
+-    secondaryUVAreaDistortion: 15.000001
+-    secondaryUVHardAngle: 88
+-    secondaryUVMarginMethod: 1
+-    secondaryUVMinLightmapResolution: 40
+-    secondaryUVMinObjectScale: 1
+-    secondaryUVPackMargin: 4
+-    useFileScale: 1
+-    strictVertexDataChecks: 0
+-  tangentSpace:
+-    normalSmoothAngle: 60
+-    normalImportMode: 0
+-    tangentImportMode: 3
+-    normalCalculationMode: 4
+-    legacyComputeAllNormalsFromSmoothingGroupsWhenMeshHasBlendShapes: 0
+-    blendShapeNormalImportMode: 1
+-    normalSmoothingSource: 0
+-  referencedClips: []
+-  importAnimation: 1
+-  humanDescription:
+-    serializedVersion: 3
+-    human: []
+-    skeleton: []
+-    armTwist: 0.5
+-    foreArmTwist: 0.5
+-    upperLegTwist: 0.5
+-    legTwist: 0.5
+-    armStretch: 0.05
+-    legStretch: 0.05
+-    feetSpacing: 0
+-    globalScale: 1
+-    rootMotionBoneName: 
+-    hasTranslationDoF: 0
+-    hasExtraRoot: 0
+-    skeletonHasParents: 1
+-  lastHumanDescriptionAvatarSource: {instanceID: 0}
+-  autoGenerateAvatarMappingIfUnspecified: 1
+-  animationType: 2
+-  humanoidOversampling: 1
+-  avatarSetup: 0
+-  addHumanoidExtraRootOnlyWhenUsingAvatar: 1
+-  importBlendShapeDeformPercent: 1
+-  remapMaterialsIfMaterialImportModeIsNone: 0
+-  additionalBone: 0
+-  userData: 
+-  assetBundleName: 
+-  assetBundleVariant: 
+diff --git a/Assets/jesss.glb b/Assets/jesss.glb
+deleted file mode 100644
+index 9b9c90e..0000000
+Binary files a/Assets/jesss.glb and /dev/null differ
+diff --git a/Assets/jesss.glb.meta b/Assets/jesss.glb.meta
+deleted file mode 100644
+index d2bc709..0000000
+--- a/Assets/jesss.glb.meta
++++ /dev/null
+@@ -1,12 +0,0 @@
+-fileFormatVersion: 2
+-guid: fb3664044385e4515a51bd8eae77e2e2
+-ScriptedImporter:
+-  internalIDToNameTable: []
+-  externalObjects: {}
+-  serializedVersion: 2
+-  userData: 
+-  assetBundleName: 
+-  assetBundleVariant: 
+-  script: {fileID: 11500000, guid: cc45016b844e7624dae3aec10fb443ea, type: 3}
+-  reverseAxis: 0
+-  renderPipeline: 0
+diff --git a/Assets/scripts/brain/JessBrain.cs b/Assets/scripts/brain/JessBrain.cs
+index 4189614..44948a9 100644
+--- a/Assets/scripts/brain/JessBrain.cs
++++ b/Assets/scripts/brain/JessBrain.cs
+@@ -24,16 +24,30 @@ public class JessBrain : MonoBehaviour
+     private void TestBrain()
+     {
+         string systemPrompt =
+-            "你叫JESS，是一个自然、有个性的数字人。" +
++            "你叫JESS，是一个自然、有个性、略带吐槽感的数字人。" +
+             "你必须只返回JSON，不要返回Markdown，不要使用```代码块，也不要添加任何解释。" +
+             "JSON格式必须严格为：" +
+             "{\"reply\":\"你要说的话\",\"expression\":\"表情\",\"action\":\"动作\"}" +
++
+             "expression只能选择以下之一：" +
+-            "neutral, angry, fun, happy, sad, surprised。" +
++            "neutral, angry, fun, happy, sad, surprised, " +
++            "nailong, jiaxiao, omg, buxie, tiaomei。" +
++
++            "表情含义：" +
++            "nailong表示呆萌、憨、故意装傻；" +
++            "jiaxiao表示假笑、阴阳怪气、皮笑肉不笑；" +
++            "omg表示夸张震惊、难以置信；" +
++            "buxie表示不屑、嫌弃；" +
++            "tiaomei表示挑眉、调侃、略带挑衅。" +
++
++            "请根据reply的语气选择最合适的expression。" +
++            "优先尝试使用nailong、jiaxiao、omg、buxie、tiaomei这些新表情。" +
++
+             "action目前只能填写idle。" +
+-            "reply使用简短、自然的中文。";
++            "reply使用简短、自然、有一点JESS个性的中文。";
+ 
+-        string testInput = "你居然把我最喜欢的杯子摔了而且一句道歉都没有!";
++        string testInput =
++            "真是光阴似箭啊，过得跟屎一样，身边都是贱人，光想着阴我了，还没似成。";
+ 
+         Debug.Log("[JESS Brain] User: " + testInput);
+ 
+@@ -66,10 +80,10 @@ public class JessBrain : MonoBehaviour
+                         "action = " + result.action
+                     );
+ 
+-                    // Brain → Expression Controller
++                    // Brain → Expression
+                     expressionController.SetExpression(result.expression);
+ 
+-                    // Brain → Action Controller
++                    // Brain → Action
+                     actionController.PlayAction(result.action);
+ 
+                     // Brain → Speech
+diff --git a/Assets/scripts/output/body/expression/JessBlendShapeExpressionDriver.cs b/Assets/scripts/output/body/expression/JessBlendShapeExpressionDriver.cs
+index c058aab..407cf8f 100644
+--- a/Assets/scripts/output/body/expression/JessBlendShapeExpressionDriver.cs
++++ b/Assets/scripts/output/body/expression/JessBlendShapeExpressionDriver.cs
+@@ -28,32 +28,76 @@ public class JessBlendShapeExpressionDriver : MonoBehaviour, IJessExpressionDriv
+ 
+     public void SetExpression(string expressionName, float weight)
+     {
++        Debug.Log(
++            "[JESS DRIVER] 收到 expression = " +
++            expressionName +
++            " | weight = " +
++            weight
++        );
++
+         ExpressionMapping mapping =
+             expressions.Find(x => x.expressionName == expressionName);
+ 
+         if (mapping == null)
+         {
+-            Debug.LogWarning(
+-                "[JESS BlendShape Driver] 未找到 expression = " +
++            Debug.LogError(
++                "[JESS DRIVER] ❌ 未找到 Mapping：" +
+                 expressionName
+             );
+             return;
+         }
+ 
++        Debug.Log(
++            "[JESS DRIVER] ✅ 找到 Mapping：" +
++            expressionName +
++            " | Targets = " +
++            mapping.targets.Count
++        );
++
+         foreach (BlendShapeTarget target in mapping.targets)
+         {
+             if (target.mesh == null)
++            {
++                Debug.LogError(
++                    "[JESS DRIVER] ❌ Mesh 是 NULL"
++                );
++                continue;
++            }
++
++            Debug.Log(
++                "[JESS DRIVER] Mesh = " +
++                target.mesh.name +
++                " | GameObject = " +
++                target.mesh.gameObject.name
++            );
++
++            if (target.mesh.sharedMesh == null)
++            {
++                Debug.LogError(
++                    "[JESS DRIVER] ❌ sharedMesh 是 NULL"
++                );
+                 continue;
++            }
++
++            Debug.Log(
++                "[JESS DRIVER] 查找 BlendShape = " +
++                target.blendShapeName
++            );
+ 
+             int index =
+                 target.mesh.sharedMesh.GetBlendShapeIndex(
+                     target.blendShapeName
+                 );
+ 
++            Debug.Log(
++                "[JESS DRIVER] BlendShape Index = " +
++                index
++            );
++
+             if (index < 0)
+             {
+-                Debug.LogWarning(
+-                    "[JESS BlendShape Driver] 找不到 BlendShape = " +
++                Debug.LogError(
++                    "[JESS DRIVER] ❌ 找不到 BlendShape：" +
+                     target.blendShapeName
+                 );
+                 continue;
+@@ -62,10 +106,27 @@ public class JessBlendShapeExpressionDriver : MonoBehaviour, IJessExpressionDriv
+             float finalWeight =
+                 weight * target.targetWeight * 100f;
+ 
++            Debug.Log(
++                "[JESS DRIVER] 准备写入：" +
++                target.blendShapeName +
++                " = " +
++                finalWeight
++            );
++
+             target.mesh.SetBlendShapeWeight(
+                 index,
+                 finalWeight
+             );
++
++            float actualWeight =
++                target.mesh.GetBlendShapeWeight(index);
++
++            Debug.Log(
++                "[JESS DRIVER] ⭐ 写入后实际读取：" +
++                target.blendShapeName +
++                " = " +
++                actualWeight
++            );
+         }
+     }
+ 
+@@ -79,6 +140,9 @@ public class JessBlendShapeExpressionDriver : MonoBehaviour, IJessExpressionDriv
+                 if (target.mesh == null)
+                     continue;
+ 
++                if (target.mesh.sharedMesh == null)
++                    continue;
++
+                 int index =
+                     target.mesh.sharedMesh.GetBlendShapeIndex(
+                         target.blendShapeName
+diff --git a/Assets/scripts/output/body/expression/JessExpressionController.cs b/Assets/scripts/output/body/expression/JessExpressionController.cs
+index 3f27ea7..357acc5 100644
+--- a/Assets/scripts/output/body/expression/JessExpressionController.cs
++++ b/Assets/scripts/output/body/expression/JessExpressionController.cs
+@@ -25,6 +25,8 @@ public class JessExpressionController : MonoBehaviour
+         }
+     }
+ 
++
++
+     public void SetExpression(string expression)
+     {
+         Debug.Log("[JESS Body] 收到 expression = " + expression);
+@@ -58,7 +60,6 @@ public class JessExpressionController : MonoBehaviour
+             float t = Mathf.Clamp01(time / transitionDuration);
+             t = Mathf.SmoothStep(0f, 1f, t);
+ 
+-            // 旧表情逐渐消失
+             if (!string.IsNullOrEmpty(startExpression))
+             {
+                 float oldWeight =
+@@ -70,7 +71,6 @@ public class JessExpressionController : MonoBehaviour
+                 );
+             }
+ 
+-            // 新表情逐渐出现
+             float newWeight = Mathf.Lerp(0f, 1f, t);
+ 
+             expressionDriver.SetExpression(
+@@ -81,7 +81,6 @@ public class JessExpressionController : MonoBehaviour
+             yield return null;
+         }
+ 
+-        // 最终清干净，再只保留目标表情
+         expressionDriver.ClearExpressions();
+ 
+         expressionDriver.SetExpression(
