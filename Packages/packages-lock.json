@@ -1,25 +1,5 @@
 {
   "dependencies": {
-    "com.hecomi.ulipsync": {
-      "version": "https://github.com/hecomi/uLipSync.git#upm",
-      "depth": 0,
-      "source": "git",
-      "dependencies": {
-        "com.unity.burst": "1.4.11",
-        "com.unity.mathematics": "1.2.5"
-      },
-      "hash": "ece3272762f2148dd8d3e658ec04fcbd79d4d97e"
-    },
-    "com.unity.burst": {
-      "version": "1.8.21",
-      "depth": 1,
-      "source": "registry",
-      "dependencies": {
-        "com.unity.mathematics": "1.2.1",
-        "com.unity.modules.jsonserialize": "1.0.0"
-      },
-      "url": "https://packages.unity.cn"
-    },
     "com.unity.collab-proxy": {
       "version": "2.12.4",
       "depth": 0,

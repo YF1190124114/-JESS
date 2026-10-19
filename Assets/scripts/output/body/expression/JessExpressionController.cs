@@ -25,8 +25,6 @@ public class JessExpressionController : MonoBehaviour
         }
     }
 
-
-
     public void SetExpression(string expression)
     {
         Debug.Log("[JESS Body] 收到 expression = " + expression);
@@ -60,6 +58,7 @@ public class JessExpressionController : MonoBehaviour
             float t = Mathf.Clamp01(time / transitionDuration);
             t = Mathf.SmoothStep(0f, 1f, t);
 
+            // 旧表情逐渐消失
             if (!string.IsNullOrEmpty(startExpression))
             {
                 float oldWeight =
@@ -71,6 +70,7 @@ public class JessExpressionController : MonoBehaviour
                 );
             }
 
+            // 新表情逐渐出现
             float newWeight = Mathf.Lerp(0f, 1f, t);
 
             expressionDriver.SetExpression(
@@ -81,6 +81,7 @@ public class JessExpressionController : MonoBehaviour
             yield return null;
         }
 
+        // 最终清干净，再只保留目标表情
         expressionDriver.ClearExpressions();
 
         expressionDriver.SetExpression(
